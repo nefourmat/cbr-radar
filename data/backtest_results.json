@@ -1,0 +1,130 @@
+{
+  "generated_at": "2026-06-03T01:30:58.363771",
+  "data_range": "2023-05 — 2026-04",
+  "months_available": 36,
+  "streak_threshold": 3,
+  "signals_found": 5,
+  "note": "Недостаточно данных для надёжной статистики. Нужны данные с 2016 года (часть Б).",
+  "results": [
+    {
+      "signal_month": "2023-08",
+      "streak": 3,
+      "total_trln": 18.0,
+      "change_bln": 242.6,
+      "ks_at_signal": 8.5,
+      "horizons": {
+        "6m": {
+          "outcome": "no_cut",
+          "months_to_cut": null,
+          "total_cut_bps": 0
+        },
+        "9m": {
+          "outcome": "no_cut",
+          "months_to_cut": null,
+          "total_cut_bps": 0
+        },
+        "12m": {
+          "outcome": "no_cut",
+          "months_to_cut": null,
+          "total_cut_bps": 0
+        }
+      }
+    },
+    {
+      "signal_month": "2024-01",
+      "streak": 3,
+      "total_trln": 18.8,
+      "change_bln": 31.3,
+      "ks_at_signal": 16.0,
+      "horizons": {
+        "6m": {
+          "outcome": "no_cut",
+          "months_to_cut": null,
+          "total_cut_bps": 0
+        },
+        "9m": {
+          "outcome": "no_cut",
+          "months_to_cut": null,
+          "total_cut_bps": 0
+        },
+        "12m": {
+          "outcome": "no_cut",
+          "months_to_cut": null,
+          "total_cut_bps": 0
+        }
+      }
+    },
+    {
+      "signal_month": "2024-09",
+      "streak": 3,
+      "total_trln": 19.4,
+      "change_bln": 285.6,
+      "ks_at_signal": 18.0,
+      "horizons": {
+        "6m": {
+          "outcome": "no_cut",
+          "months_to_cut": null,
+          "total_cut_bps": 0
+        },
+        "9m": {
+          "outcome": "no_cut",
+          "months_to_cut": null,
+          "total_cut_bps": 0
+        },
+        "12m": {
+          "outcome": "cut",
+          "months_to_cut": 9.2,
+          "total_cut_bps": -300
+        }
+      }
+    },
+    {
+      "signal_month": "2025-06",
+      "streak": 3,
+      "total_trln": 23.6,
+      "change_bln": 416.4,
+      "ks_at_signal": 21.0,
+      "horizons": {
+        "6m": {
+          "outcome": "cut",
+          "months_to_cut": 0.3,
+          "total_cut_bps": -450
+        },
+        "9m": {
+          "outcome": "cut",
+          "months_to_cut": 0.3,
+          "total_cut_bps": -550
+        },
+        "12m": {
+          "outcome": "cut",
+          "months_to_cut": 0.3,
+          "total_cut_bps": -650
+        }
+      }
+    },
+    {
+      "signal_month": "2025-12",
+      "streak": 3,
+      "total_trln": 26.5,
+      "change_bln": 356.1,
+      "ks_at_signal": 16.5,
+      "horizons": {
+        "6m": {
+          "outcome": "cut",
+          "months_to_cut": 0.7,
+          "total_cut_bps": -200
+        },
+        "9m": {
+          "outcome": "cut",
+          "months_to_cut": 0.7,
+          "total_cut_bps": -200
+        },
+        "12m": {
+          "outcome": "cut",
+          "months_to_cut": 0.7,
+          "total_cut_bps": -200
+        }
+      }
+    }
+  ]
+}
