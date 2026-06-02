@@ -22,6 +22,8 @@ import sys
 import json
 import asyncio
 import logging
+from dotenv import load_dotenv
+load_dotenv()
 from pathlib import Path
 from datetime import datetime
 
@@ -32,7 +34,7 @@ from telegram import (
 from telegram.ext import (
     Application, CommandHandler, ContextTypes
 )
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.schedulers.background import BackgroundScheduler
 
 # Добавляем корень проекта
 sys.path.insert(0, str(Path(__file__).parent))
@@ -276,17 +278,17 @@ def run():
     app.add_handler(CommandHandler("digest", cmd_digest))
 
     # Планировщик
-    scheduler = AsyncIOScheduler(timezone="Europe/Moscow")
+    scheduler = BackgroundScheduler(timezone="Europe/Moscow")
 
     scheduler.add_job(
-        lambda: asyncio.create_task(job_weekly_digest(app.bot)),
+        lambda: asyncio.run(job_weekly_digest(app.bot)),
         "cron",
         day_of_week="fri",
         hour=9, minute=0,
         id="weekly_digest",
     )
     scheduler.add_job(
-        lambda: asyncio.create_task(job_auction_alert(app.bot)),
+        lambda: asyncio.run(job_auction_alert(app.bot)),
         "cron",
         day_of_week="wed",
         hour=13, minute=10,
