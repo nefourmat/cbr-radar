@@ -1,0 +1,55 @@
+{
+  "generated_at": "2026-06-01T17:23:56.610500",
+  "current_state": {
+    "ks": 14.5,
+    "slope_2_10": 1.56,
+    "y1": 12.96,
+    "y10": 14.89,
+    "min_yield": 12.96,
+    "expected_cut": 1.54,
+    "btc_4w": 0.51,
+    "date": "2026-05-29 00:00:00"
+  },
+  "probability_cut_10w": 0,
+  "median_weeks_to_cut": null,
+  "median_cut_bps": null,
+  "n_similar": 5,
+  "n_cuts": 0,
+  "matches": [
+    {
+      "date": "2023-08-04",
+      "distance": 1.527,
+      "outcome": "no_cut",
+      "weeks_to_cut": null,
+      "cut_bps": 0
+    },
+    {
+      "date": "2023-07-28",
+      "distance": 1.552,
+      "outcome": "no_cut",
+      "weeks_to_cut": null,
+      "cut_bps": 0
+    },
+    {
+      "date": "2023-08-11",
+      "distance": 1.701,
+      "outcome": "no_cut",
+      "weeks_to_cut": null,
+      "cut_bps": 0
+    },
+    {
+      "date": "2022-12-30",
+      "distance": 1.903,
+      "outcome": "no_cut",
+      "weeks_to_cut": null,
+      "cut_bps": 0
+    },
+    {
+      "date": "2022-12-09",
+      "distance": 2.013,
+      "outcome": "no_cut",
+      "weeks_to_cut": null,
+      "cut_bps": 0
+    }
+  ]
+}

@@ -1,0 +1,71 @@
+{
+  "generated_at": "2026-06-02T10:24:04.796732",
+  "secid": "SU26238RMFS4",
+  "current_price": 571.99,
+  "current_price_pct": 57.199,
+  "duration_years": 9.574303618904466,
+  "pnl_aug2024": {
+    "entry_date": "2024-08-01",
+    "entry_price": 528.8,
+    "entry_yield_pct": 13.39,
+    "current_date": "2026-06-01",
+    "current_price": 571.99,
+    "price_gain_rub": 43.19,
+    "price_gain_pct": 8.17,
+    "coupons_received": 106.2,
+    "total_return_rub": 149.39,
+    "total_return_pct": 28.25,
+    "months_held": 22.0,
+    "annualized_pct": 14.53
+  },
+  "scenarios": [
+    {
+      "label": "Базовый: КС → 13%",
+      "cut_bps": -150,
+      "months": 12,
+      "price_chg_pct": 14.4,
+      "coupon_pct": 12.4,
+      "total_pct": 26.7,
+      "annual_pct": 26.7,
+      "real_opt": 16.9,
+      "real_base": 14.9,
+      "real_pess": 12.9
+    },
+    {
+      "label": "Оптимистичный: КС → 11%",
+      "cut_bps": -350,
+      "months": 18,
+      "price_chg_pct": 33.5,
+      "coupon_pct": 18.6,
+      "total_pct": 52.1,
+      "annual_pct": 34.7,
+      "real_opt": 24.9,
+      "real_base": 22.9,
+      "real_pess": 20.9
+    },
+    {
+      "label": "Пессимистичный: КС → 14%",
+      "cut_bps": -50,
+      "months": 18,
+      "price_chg_pct": 4.8,
+      "coupon_pct": 18.6,
+      "total_pct": 23.4,
+      "annual_pct": 15.6,
+      "real_opt": 5.8,
+      "real_base": 3.8,
+      "real_pess": 1.8
+    },
+    {
+      "label": "Плоский: КС без изменений",
+      "cut_bps": 0,
+      "months": 12,
+      "price_chg_pct": -0.0,
+      "coupon_pct": 12.4,
+      "total_pct": 12.4,
+      "annual_pct": 12.4,
+      "real_opt": 2.6,
+      "real_base": 0.6,
+      "real_pess": -1.4
+    }
+  ]
+}

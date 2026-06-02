@@ -1,0 +1,116 @@
+{
+  "generated_at": "2026-06-02T22:34:55.270010",
+  "key_rate": 14.5,
+  "verdict": "Ждать сигнала входа в ОФЗ",
+  "action": "Уведомим когда BTC > 1.5×",
+  "regime": {
+    "name": "Нормализация",
+    "color": "blue",
+    "emoji": "🔵",
+    "desc": "Рынок ждёт снижения КС — сигнал ещё не пришёл"
+  },
+  "signals": {
+    "curve": {
+      "status": "bull",
+      "label": "Бычья",
+      "arrow": "↑",
+      "exp_cut": 1.52,
+      "y1": 12.99,
+      "y2": 13.43,
+      "y10": 14.93,
+      "slope_2_10": 1.5,
+      "min_yield": 12.98,
+      "min_срок": 0.75,
+      "date": "01.06.2026",
+      "description": "1Y ОФЗ = 12.99% при КС 14.5% · рынок ждёт снижения до ~13.0%"
+    },
+    "auctions": {
+      "status": "bear",
+      "label": "Слабые",
+      "arrow": "↓",
+      "avg_btc": 0.49,
+      "long_btc": 0.45,
+      "last_btc": 0.26,
+      "last_date": "27.05.2026",
+      "last_code": "26230RMFS",
+      "last_yield": 14.799999999999999,
+      "last_demand_mln": 67460,
+      "yield_trend": 0.6,
+      "supply_pressure": 0.67,
+      "pass_through": 0.66,
+      "entry_signal": false,
+      "description": "BTC 0.49× при норме 1.5× · pass-through 66% · сигнал входа ещё не пришёл"
+    },
+    "banks": {
+      "status": "bull",
+      "label": "Покупают",
+      "arrow": "↑",
+      "total_bln": 340.1,
+      "streak": 1,
+      "buyers": [
+        {
+          "name": "СБЕРБАНК РОССИИ",
+          "change_bln": 130.1
+        },
+        {
+          "name": "НАЦИОНАЛЬНЫЙ РЕЗЕРВНЫЙ БАНК",
+          "change_bln": 46.7
+        },
+        {
+          "name": "ЮНИКРЕДИТ БАНК",
+          "change_bln": 28.3
+        },
+        {
+          "name": "ОЗОН БАНК",
+          "change_bln": 23.2
+        },
+        {
+          "name": "БАНК ДОМ.РФ",
+          "change_bln": 18.0
+        }
+      ],
+      "description": "+₽340 млрд за месяц · стрик 1 мес"
+    }
+  },
+  "recommendation": {
+    "asset": "ОФЗ 26238",
+    "secid": "SU26238RMFS4",
+    "matdate": "2041-05-15",
+    "coupon": 7.1,
+    "ytm": 14.46,
+    "duration": 7.41,
+    "pnl_base": 19.7,
+    "pnl_optimistic": 29.5,
+    "pnl_flat": 12.4,
+    "probability": 67,
+    "win_rate": 68,
+    "pass_through": 0.66,
+    "supply_pressure": 0.67,
+    "entry_signal": false,
+    "entry_condition": "BTC > 1.5× на аукционе длинных ОФЗ",
+    "invalidation": "ИПЦ май > 10.5% г/г → 05.06.2026",
+    "payout": [
+      {
+        "scenario": "КС без изменений",
+        "rub": 112400,
+        "pct": 12.4
+      },
+      {
+        "scenario": "КС → 13.0%",
+        "base": true,
+        "rub": 119700,
+        "pct": 19.7
+      },
+      {
+        "scenario": "КС → 12.0%",
+        "rub": 126000,
+        "pct": 26
+      },
+      {
+        "scenario": "КС → 11.0%",
+        "rub": 129500,
+        "pct": 29.5
+      }
+    ]
+  }
+}

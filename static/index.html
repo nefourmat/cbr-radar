@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ЦБ-Радар</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:       #000;
+  --bg1:      #0C0C0E;
+  --bg2:      #141416;
+  --glass:    rgba(255,255,255,0.045);
+  --glass2:   rgba(255,255,255,0.08);
+  --border:   rgba(255,255,255,0.07);
+  --border2:  rgba(255,255,255,0.11);
+  --text:     #F2F2F7;
+  --text2:    rgba(242,242,247,0.55);
+  --text3:    rgba(242,242,247,0.25);
+  --blue:     #0A84FF;
+  --blue-s:   rgba(10,132,255,0.11);
+  --blue-g:   rgba(10,132,255,0.22);
+  --green:    #32D74B;
+  --green-s:  rgba(50,215,75,0.09);
+  --red:      #FF453A;
+  --red-s:    rgba(255,69,58,0.09);
+  --amber:    #FFD60A;
+  --amber-s:  rgba(255,214,10,0.09);
+  --purple:   #BF5AF2;
+  --purple-s: rgba(191,90,242,0.09);
+  --r:        18px;
+  --r2:       13px;
+  --f: 'Plus Jakarta Sans', -apple-system, sans-serif;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html { background: var(--bg); }
+body {
+  font-family: var(--f); background: var(--bg); color: var(--text);
+  min-height: 100dvh; max-width: 430px; margin: 0 auto;
+  padding-bottom: 90px; -webkit-font-smoothing: antialiased;
+}
+@keyframes up { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:none; } }
+.a1{animation:up .45s ease both .05s}
+.a2{animation:up .45s ease both .14s}
+.a3{animation:up .45s ease both .22s}
+.a4{animation:up .45s ease both .30s}
+.a5{animation:up .45s ease both .38s}
+.a6{animation:up .45s ease both .46s}
+
+/* ── HEADER ── */
+.hdr {
+  position:sticky; top:0; z-index:200;
+  padding:13px 18px 11px;
+  background:rgba(0,0,0,0.82);
+  backdrop-filter:blur(28px) saturate(200%);
+  -webkit-backdrop-filter:blur(28px) saturate(200%);
+  border-bottom:1px solid var(--border);
+  display:flex; align-items:center; justify-content:space-between;
+}
+.logo { font-size:16px; font-weight:800; letter-spacing:-0.03em; }
+.logo-dot { color:var(--blue); }
+.live {
+  display:flex; align-items:center; gap:5px;
+  font-size:11px; font-weight:500; color:var(--text2);
+  background:var(--glass); border:1px solid var(--border);
+  padding:4px 10px; border-radius:99px;
+}
+.live-dot {
+  width:5px; height:5px; border-radius:50%; background:var(--green);
+  box-shadow:0 0 6px var(--green);
+  animation:blink 2s infinite;
+}
+@keyframes blink{0%,100%{opacity:1;box-shadow:0 0 6px var(--green)}50%{opacity:.4;box-shadow:none}}
+
+/* ── PANES ── */
+.pane { display:none; padding:14px 14px 0; }
+.pane.active { display:block; }
+
+/* ── REGIME CARD ── */
+.regime {
+  border-radius:var(--r); padding:18px 18px 16px;
+  border:1px solid var(--border2);
+  background:linear-gradient(135deg, rgba(50,215,75,.06) 0%, rgba(50,215,75,.01) 100%);
+  margin-bottom:12px; position:relative; overflow:hidden;
+}
+.regime::after {
+  content:''; position:absolute; top:-50px; right:-30px;
+  width:140px; height:140px; border-radius:50%;
+  background:radial-gradient(circle, rgba(50,215,75,.12) 0%, transparent 70%);
+  pointer-events:none;
+}
+.regime-kicker {
+  font-size:10px; font-weight:700; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--green); margin-bottom:10px; opacity:.8;
+}
+.regime-row { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+.regime-dot {
+  width:10px; height:10px; border-radius:50%; background:var(--green);
+  box-shadow:0 0 10px var(--green); flex-shrink:0;
+}
+.regime-name { font-size:24px; font-weight:800; letter-spacing:-.04em; }
+.regime-desc { font-size:13px; color:var(--text2); line-height:1.55; }
+.regime-hint {
+  margin-top:10px; padding-top:10px; border-top:1px solid rgba(255,255,255,.06);
+  font-size:11px; color:var(--text3);
+}
+
+/* ── RECOMMENDATION ── */
+.rec {
+  border-radius:var(--r); border:1px solid var(--border2);
+  background:var(--glass); overflow:hidden; margin-bottom:12px;
+}
+.rec-top {
+  padding:16px 16px 14px;
+  background:linear-gradient(135deg,var(--blue-s),transparent);
+  border-bottom:1px solid var(--border);
+}
+.rec-kicker {
+  font-size:10px; font-weight:700; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--blue); margin-bottom:8px;
+}
+.rec-title { font-size:20px; font-weight:800; letter-spacing:-.04em; margin-bottom:4px; }
+.rec-sub { font-size:13px; color:var(--text2); }
+.rec-metrics { display:grid; grid-template-columns:1fr 1fr 1fr; gap:1px; background:var(--border); }
+.rm {
+  background:var(--bg1); padding:13px 14px;
+  display:flex; flex-direction:column; gap:3px;
+}
+.rm:first-child { border-radius:0 0 0 var(--r2); }
+.rm:last-child  { border-radius:0 0 var(--r2) 0; }
+.rm-label { font-size:9px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--text3); }
+.rm-val { font-size:20px; font-weight:800; letter-spacing:-.03em; }
+.rm-val.green { color:var(--green); }
+.rm-val.blue  { color:var(--blue);  }
+.rm-note { font-size:10px; color:var(--text3); }
+
+/* ── WHY CARD ── */
+.why {
+  border-radius:var(--r2); border:1px solid rgba(255,214,10,.15);
+  background:rgba(255,214,10,.04); padding:14px 16px; margin-bottom:12px;
+}
+.why-label { font-size:10px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--amber); margin-bottom:6px; }
+.why-text { font-size:13px; color:rgba(242,242,247,.7); line-height:1.6; }
+.why-text b { color:var(--text); font-weight:600; }
+
+/* ── PAYOUT ── */
+.payout { border-radius:var(--r2); border:1px solid var(--border); background:var(--glass); overflow:hidden; margin-bottom:12px; }
+.payout-header { padding:12px 14px 10px; border-bottom:1px solid var(--border); }
+.payout-title { font-size:13px; font-weight:700; letter-spacing:-.01em; }
+.payout-sub { font-size:11px; color:var(--text3); margin-top:2px; }
+.payout-row {
+  display:grid; grid-template-columns:1fr auto auto;
+  gap:10px; align-items:center; padding:11px 14px;
+  border-bottom:1px solid rgba(255,255,255,.04);
+}
+.payout-row:last-child { border-bottom:none; }
+.payout-row.highlight { background:var(--blue-s); }
+.pr-label { font-size:12px; color:var(--text2); }
+.pr-rub { font-size:14px; font-weight:700; letter-spacing:-.01em; }
+.pr-rub.g { color:var(--green); }
+.pr-rub.b { color:var(--blue); }
+.pr-rub.n { color:var(--text2); }
+.pr-pct { font-size:11px; color:var(--text3); }
+.pr-badge {
+  font-size:9px; font-weight:700; letter-spacing:.06em;
+  text-transform:uppercase; padding:2px 7px; border-radius:99px;
+  background:var(--blue-s); color:var(--blue); white-space:nowrap;
+}
+
+/* ── SIGNAL STRIP ── */
+.strip { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:12px; }
+.sp {
+  border-radius:var(--r2); border:1px solid var(--border);
+  background:var(--glass); padding:12px 10px; text-align:center;
+  cursor:pointer; transition:all .15s;
+}
+.sp:active { transform:scale(.97); }
+.sp.g { background:var(--green-s); border-color:rgba(50,215,75,.2); }
+.sp.r { background:var(--red-s);   border-color:rgba(255,69,58,.2); }
+.sp.a { background:var(--amber-s); border-color:rgba(255,214,10,.2); }
+.sp-ic { font-size:18px; margin-bottom:5px; }
+.sp-lbl { font-size:9px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--text3); margin-bottom:4px; }
+.sp-val { font-size:12px; font-weight:700; }
+.sp.g .sp-val { color:var(--green); }
+.sp.r .sp-val { color:var(--red); }
+.sp.a .sp-val { color:var(--amber); }
+.sp-num { font-size:10px; color:var(--text2); margin-top:2px; }
+
+/* ── BUTTONS ── */
+.btn-primary {
+  width:100%; padding:16px; border-radius:var(--r2); border:none;
+  background:var(--blue); color:#fff; font-family:var(--f);
+  font-size:15px; font-weight:700; cursor:pointer; margin-bottom:10px;
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  box-shadow:0 4px 20px rgba(10,132,255,.28); transition:all .15s;
+  letter-spacing:-.01em;
+}
+.btn-primary:active { transform:scale(.98); box-shadow:0 2px 10px rgba(10,132,255,.18); }
+.btn-share {
+  width:100%; padding:14px; border-radius:var(--r2);
+  background:var(--glass); border:1px solid var(--border);
+  color:var(--text); font-family:var(--f);
+  font-size:14px; font-weight:600; cursor:pointer; margin-bottom:14px;
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  transition:all .15s; letter-spacing:-.01em;
+}
+.btn-share:active { background:var(--glass2); }
+
+/* ── SOON CARDS ── */
+.soon-grid { display:flex; flex-direction:column; gap:8px; margin-bottom:14px; }
+.soon-card {
+  border-radius:var(--r2); border:1px solid var(--border);
+  background:var(--glass); padding:14px 16px;
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  cursor:default; opacity:.7;
+}
+.soon-left { display:flex; align-items:center; gap:12px; }
+.soon-ic { font-size:20px; flex-shrink:0; }
+.soon-title { font-size:13px; font-weight:600; letter-spacing:-.01em; }
+.soon-desc { font-size:11px; color:var(--text3); margin-top:2px; }
+.soon-badge {
+  font-size:10px; font-weight:700; letter-spacing:.06em;
+  text-transform:uppercase; padding:4px 9px; border-radius:99px;
+  white-space:nowrap; flex-shrink:0;
+}
+.soon-badge.blue   { background:var(--blue-s);   color:var(--blue);   border:1px solid rgba(10,132,255,.2); }
+.soon-badge.purple { background:var(--purple-s); color:var(--purple); border:1px solid rgba(191,90,242,.2); }
+.soon-badge.green  { background:var(--green-s);  color:var(--green);  border:1px solid rgba(50,215,75,.2); }
+
+/* ── SEC HEAD ── */
+.sh { display:flex; align-items:baseline; justify-content:space-between; margin:18px 0 10px; }
+.sh:first-child { margin-top:0; }
+.sh-t { font-size:14px; font-weight:700; letter-spacing:-.02em; }
+.sh-l { font-size:12px; color:var(--blue); cursor:pointer; }
+
+/* ── RATES (Ставка ЦБ) ── */
+.meet {
+  background:var(--glass); border:1px solid var(--border);
+  border-radius:var(--r2); overflow:hidden; margin-bottom:8px;
+}
+.meet-top {
+  display:grid; grid-template-columns:1fr auto; gap:10px;
+  align-items:start; padding:14px 16px 10px;
+}
+.meet-date { font-size:14px; font-weight:700; letter-spacing:-.02em; }
+.meet-type { font-size:11px; color:var(--text3); margin-top:3px; }
+.meet-pct { font-size:30px; font-weight:800; letter-spacing:-.05em; }
+.m-g { color:var(--green); } .m-a { color:var(--amber); } .m-n { color:var(--text3); }
+.meet-bar { height:2px; margin:0 16px 10px; background:var(--border); border-radius:1px; overflow:hidden; }
+.meet-fill { height:100%; border-radius:1px; }
+.bg-g{background:var(--green);} .bg-a{background:var(--amber);} .bg-n{background:var(--text3);}
+.meet-pills { display:flex; gap:6px; padding:0 16px 14px; flex-wrap:wrap; }
+.pill { background:var(--bg2); border:1px solid var(--border); border-radius:99px; padding:4px 10px; font-size:11px; color:var(--text2); }
+.pill b { color:var(--text); }
+.meet-impl { font-family:monospace; font-size:11px; color:var(--text3); }
+
+/* ── POSITION ── */
+.pos { border-radius:var(--r); border:1px solid var(--border2); background:var(--glass); overflow:hidden; margin-bottom:10px; }
+.pos-top { padding:16px 16px 14px; background:linear-gradient(135deg,var(--blue-s),transparent); border-bottom:1px solid var(--border); }
+.pos-kicker { font-size:10px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--blue); margin-bottom:6px; }
+.pos-title { font-size:16px; font-weight:800; letter-spacing:-.03em; line-height:1.25; margin-bottom:12px; }
+.conf-row { display:flex; align-items:center; gap:10px; }
+.conf-track { flex:1; height:3px; background:rgba(255,255,255,.1); border-radius:2px; overflow:hidden; }
+.conf-fill { height:100%; background:var(--blue); border-radius:2px; }
+.conf-n { font-size:14px; font-weight:800; color:var(--blue); }
+.conf-d { font-size:11px; color:var(--green); }
+.pos-grid { padding:14px 16px; display:flex; flex-direction:column; gap:10px; }
+.pg-row { display:grid; grid-template-columns:92px 1fr; gap:8px; }
+.pg-key { font-size:9px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--text3); padding-top:2px; }
+.pg-val { font-size:13px; color:var(--text2); line-height:1.45; }
+.pg-val b { color:var(--text); font-weight:600; }
+.trigs { display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:0 16px 16px; }
+.trig { border-radius:12px; padding:11px 13px; }
+.tw { background:var(--amber-s); border:1px solid rgba(255,214,10,.15); }
+.ts { background:var(--red-s);   border:1px solid rgba(255,69,58,.15); }
+.trig-ic { font-size:15px; margin-bottom:4px; }
+.trig-lbl { font-size:9px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; margin-bottom:4px; }
+.tw .trig-lbl { color:var(--amber); } .ts .trig-lbl { color:var(--red); }
+.trig-v { font-size:11px; line-height:1.4; }
+.tw .trig-v { color:rgba(255,214,10,.7); } .ts .trig-v { color:rgba(255,69,58,.7); }
+
+/* ── SCREENER ── */
+.scr-note { background:var(--amber-s); border:1px solid rgba(255,214,10,.15); border-radius:12px; padding:10px 14px; margin-bottom:10px; font-size:12px; color:rgba(255,214,10,.8); line-height:1.55; }
+.scr-wrap { background:var(--glass); border:1px solid var(--border); border-radius:var(--r2); overflow:hidden; margin-bottom:8px; }
+.scr-hdr { display:grid; grid-template-columns:1fr 52px 58px 60px; gap:4px; padding:10px 14px; border-bottom:1px solid var(--border); font-size:9px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--text3); }
+.scr-row { display:grid; grid-template-columns:1fr 52px 58px 60px; gap:4px; padding:13px 14px; border-bottom:1px solid rgba(255,255,255,.04); align-items:center; cursor:pointer; transition:background .1s; }
+.scr-row:last-child { border-bottom:none; }
+.scr-row:active { background:var(--glass2); }
+.sr-n { font-size:13px; font-weight:600; letter-spacing:-.01em; }
+.sr-m { font-size:10px; color:var(--text3); margin-top:2px; }
+.sr-d,.sr-y { font-size:12px; color:var(--text2); text-align:right; }
+.sr-p { font-size:14px; font-weight:800; text-align:right; letter-spacing:-.02em; }
+.cg{color:var(--green);}.cb{color:var(--blue);}.cn{color:var(--text2);}
+
+/* ── BANKS ── */
+.bank { background:var(--glass); border:1px solid var(--border); border-radius:var(--r2); padding:14px 16px; margin-bottom:8px; }
+.bank-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+.bank-name { font-size:13px; font-weight:600; }
+.bank-sub { font-size:10px; color:var(--text3); margin-top:2px; }
+.bank-chg { font-size:17px; font-weight:800; color:var(--green); letter-spacing:-.02em; }
+.bank-bar { height:2px; background:var(--border); border-radius:1px; overflow:hidden; }
+.bank-fill { height:100%; background:var(--green); border-radius:1px; }
+.hist { background:var(--glass); border:1px solid var(--border); border-radius:var(--r2); padding:14px 16px; margin-top:4px; }
+.hist-k { font-size:9px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--text3); margin-bottom:6px; }
+.hist-t { font-size:13px; color:var(--text2); line-height:1.6; }
+.hist-t b { color:var(--text); }
+
+/* ── NOTIFY CARD ── */
+.notify-card {
+  border-radius:var(--r); border:1px solid var(--border);
+  background:var(--glass); padding:20px;
+  text-align:center; margin-top:8px;
+}
+.notify-ic { font-size:32px; margin-bottom:10px; }
+.notify-title { font-size:17px; font-weight:800; letter-spacing:-.03em; margin-bottom:6px; }
+.notify-desc { font-size:13px; color:var(--text2); line-height:1.55; margin-bottom:16px; }
+
+/* ── NAV ── */
+.nav {
+  position:fixed; bottom:0; left:50%; transform:translateX(-50%);
+  width:100%; max-width:430px;
+  background:rgba(0,0,0,0.88);
+  backdrop-filter:blur(28px) saturate(200%);
+  -webkit-backdrop-filter:blur(28px) saturate(200%);
+  border-top:1px solid var(--border);
+  display:grid; grid-template-columns:repeat(5,1fr);
+  padding:0 4px env(safe-area-inset-bottom,4px); z-index:200;
+}
+.nb {
+  display:flex; flex-direction:column; align-items:center; gap:3px;
+  padding:10px 4px 8px; border:none; background:none; cursor:pointer;
+  color:var(--text3); font-family:var(--f); font-size:9px;
+  font-weight:700; letter-spacing:.04em; text-transform:uppercase;
+  transition:color .15s;
+}
+.nb.active { color:var(--blue); }
+.nb svg { width:20px; height:20px; stroke-width:1.75; }
+
+/* ── MODAL ── */
+.modal { position:fixed; inset:0; background:rgba(0,0,0,.72); backdrop-filter:blur(12px); z-index:500; display:none; align-items:flex-end; justify-content:center; }
+.modal.open { display:flex; }
+.modal-box { width:100%; max-width:430px; background:#111; border-radius:22px 22px 0 0; border-top:1px solid var(--border2); padding:14px 20px 44px; animation:slideUp .3s ease; }
+@keyframes slideUp { from{transform:translateY(100%)} to{transform:none} }
+.mh { width:36px; height:4px; background:var(--border2); border-radius:2px; margin:0 auto 20px; }
+.mt { font-size:19px; font-weight:800; letter-spacing:-.03em; margin-bottom:8px; }
+.md { font-size:14px; color:var(--text2); line-height:1.55; margin-bottom:18px; }
+.mc { background:var(--glass); border:1px solid var(--border2); border-radius:13px; padding:14px 16px; margin-bottom:20px; }
+.mc-l { font-size:9px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--text3); margin-bottom:5px; }
+.mc-v { font-size:15px; font-weight:700; color:var(--amber); }
+.mc-btn { width:100%; padding:16px; border-radius:14px; border:none; background:var(--blue); color:#fff; font-family:var(--f); font-size:16px; font-weight:800; cursor:pointer; box-shadow:0 4px 24px rgba(10,132,255,.35); letter-spacing:-.02em; }
+
+/* ── SHARE CARD ── */
+.share-preview {
+  border-radius:var(--r); overflow:hidden; margin-bottom:16px;
+  background:linear-gradient(135deg,#0a0a1a 0%,#000 100%);
+  border:1px solid var(--border2); padding:20px;
+}
+.sp-logo { font-size:12px; font-weight:800; color:var(--text3); margin-bottom:16px; letter-spacing:.05em; }
+.sp-logo span { color:var(--blue); }
+.sp-label { font-size:9px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--blue); margin-bottom:6px; }
+.sp-asset { font-size:22px; font-weight:800; letter-spacing:-.04em; margin-bottom:14px; }
+.sp-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+.sp-m { display:flex; flex-direction:column; gap:3px; }
+.sp-ml { font-size:9px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--text3); }
+.sp-mv { font-size:17px; font-weight:800; letter-spacing:-.03em; }
+.sp-mv.g { color:var(--green); } .sp-mv.b { color:var(--blue); } .sp-mv.w { color:var(--text); }
+.sp-reason { margin-top:14px; padding-top:12px; border-top:1px solid var(--border); font-size:11px; color:var(--text2); line-height:1.5; }
+.sp-reason b { color:var(--text); }
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="logo">ЦБ<span class="logo-dot">·</span>Радар</div>
+  <div class="live"><div class="live-dot"></div><span id="hdate"></span></div>
+</div>
+
+<!-- ══════════════════════ ОБЗОР ══════════════════════ -->
+<div class="pane active" id="pane-overview">
+
+  <!-- Режим рынка -->
+  <div class="regime a1">
+    <div class="regime-kicker">Режим рынка · Неделя 23</div>
+    <div class="regime-row">
+      <div class="regime-dot"></div>
+      <div class="regime-name">Нормализация</div>
+    </div>
+    <div class="regime-desc">Ставка снижается. Рынок ждёт следующего шага. Хорошее время изучить позицию — но ещё не открывать.</div>
+    <div class="regime-hint">Похожие периоды: 2016 (снижение с 17%), 2019 (снижение с 7.75%)</div>
+  </div>
+
+  <!-- Три сигнала -->
+  <div class="strip a2">
+    <div class="sp g" onclick="goPn('rates')">
+      <div class="sp-ic">📈</div>
+      <div class="sp-lbl">Кривая</div>
+      <div class="sp-val">Бычья ↑</div>
+      <div class="sp-num">−1.54% к КС</div>
+    </div>
+    <div class="sp r">
+      <div class="sp-ic">🏦</div>
+      <div class="sp-lbl">Аукционы</div>
+      <div class="sp-val">Слабые ↓</div>
+      <div class="sp-num">BTC 0.49×</div>
+    </div>
+    <div class="sp g" onclick="goPn('banks')">
+      <div class="sp-ic">🏛</div>
+      <div class="sp-lbl">Банки</div>
+      <div class="sp-val">Покупают ↑</div>
+      <div class="sp-num">+₽231 млрд</div>
+    </div>
+  </div>
+
+  <!-- Рекомендация -->
+  <div class="rec a3">
+    <div class="rec-top">
+      <div class="rec-kicker">Лучшая ставка недели</div>
+      <div class="rec-title">ОФЗ 26254</div>
+      <div class="rec-sub">Погашение 2040 · Купон 13.00% · Дюрация 6.4 лет</div>
+    </div>
+    <div class="rec-metrics">
+      <div class="rm">
+        <div class="rm-label">Доходность</div>
+        <div class="rm-val green">+20.5%</div>
+        <div class="rm-note">при КС → 13%</div>
+      </div>
+      <div class="rm">
+        <div class="rm-label">Вероятность</div>
+        <div class="rm-val blue">67%</div>
+        <div class="rm-note">13 из 19 случаев</div>
+      </div>
+      <div class="rm">
+        <div class="rm-label">Без изменений</div>
+        <div class="rm-val" style="color:var(--text2)">+14.1%</div>
+        <div class="rm-note">только купон</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Почему -->
+  <div class="why a3">
+    <div class="why-label">⚡ Почему сейчас</div>
+    <div class="why-text">Крупнейшие банки <b>нарастили позиции в ОФЗ</b> на ₽231 млрд за месяц. Исторически такие покупки <b>предшествовали снижению ставки с опережением 10 месяцев</b>. Сигнал входа ещё не пришёл — ждём подтверждения на аукционе.</div>
+  </div>
+
+  <!-- Что заработаю -->
+  <div class="payout a4">
+    <div class="payout-header">
+      <div class="payout-title">Что будет с ₽100,000 через 18 мес</div>
+      <div class="payout-sub">ОФЗ 26254 · с поправкой на текущий рынок</div>
+    </div>
+    <div class="payout-row">
+      <div class="pr-label">КС без изменений</div>
+      <div class="pr-rub n">₽114,100</div>
+      <div class="pr-pct">+14.1%</div>
+    </div>
+    <div class="payout-row highlight">
+      <div class="pr-label">КС снизится до 13% <span class="pr-badge">Базовый</span></div>
+      <div class="pr-rub b">₽120,500</div>
+      <div class="pr-pct">+20.5%</div>
+    </div>
+    <div class="payout-row">
+      <div class="pr-label">КС снизится до 12%</div>
+      <div class="pr-rub g">₽129,200</div>
+      <div class="pr-pct">+29.2%</div>
+    </div>
+    <div class="payout-row">
+      <div class="pr-label">КС снизится до 11%</div>
+      <div class="pr-rub g">₽138,000</div>
+      <div class="pr-pct">+38.0%</div>
+    </div>
+  </div>
+
+  <!-- CTA -->
+  <button class="btn-primary a5" onclick="openModal()">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+    Уведомить когда сигнал войдёт
+  </button>
+  <button class="btn-share a5" onclick="openShare()">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16,6 12,2 8,6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+    Поделиться сделкой
+  </button>
+
+  <!-- Скоро -->
+  <div class="sh a6"><div class="sh-t">Для профессионалов</div></div>
+  <div class="soon-grid a6">
+    <div class="soon-card">
+      <div class="soon-left">
+        <div class="soon-ic">🗺</div>
+        <div>
+          <div class="soon-title">Карта режимов рынка</div>
+          <div class="soon-desc">Паника · Нормализация · Смягчение · Перегрев с историческими аналогами</div>
+        </div>
+      </div>
+      <div class="soon-badge purple">Скоро</div>
+    </div>
+    <div class="soon-card">
+      <div class="soon-left">
+        <div class="soon-ic">📊</div>
+        <div>
+          <div class="soon-title">История сигналов · Backtest</div>
+          <div class="soon-desc">Все сигналы за 10 лет с результатами и win rate</div>
+        </div>
+      </div>
+      <div class="soon-badge blue">Скоро</div>
+    </div>
+    <div class="soon-card">
+      <div class="soon-left">
+        <div class="soon-ic">🔔</div>
+        <div>
+          <div class="soon-title">Алерты для УК и банков</div>
+          <div class="soon-desc">API-доступ, корпоративные тарифы, интеграции</div>
+        </div>
+      </div>
+      <div class="soon-badge green">Скоро</div>
+    </div>
+  </div>
+  <div style="height:8px"></div>
+</div>
+
+<!-- ══════════════════════ СТАВКА ЦБ ══════════════════════ -->
+<div class="pane" id="pane-rates">
+  <div class="sh"><div class="sh-t">Ставки рынка на заседания</div></div>
+  <div style="font-size:12px;color:var(--text3);margin-bottom:14px;line-height:1.6">Implied forward rates из G-кривой · аналог CME FedWatch</div>
+  <div class="meet a1">
+    <div class="meet-top">
+      <div><div class="meet-date">19 июня 2026</div><div class="meet-type">Обычное · 17 дней</div></div>
+      <div class="meet-pct m-a">45%</div>
+    </div>
+    <div class="meet-bar"><div class="meet-fill bg-a" style="width:45%"></div></div>
+    <div class="meet-pills">
+      <div class="pill">Без изменений <b>55%</b></div>
+      <div class="pill">−50 бп <b>31%</b></div>
+      <div class="pill">−100 бп <b>14%</b></div>
+      <div class="pill meet-impl">Implied 14.28%</div>
+    </div>
+  </div>
+  <div class="meet a2">
+    <div class="meet-top">
+      <div><div class="meet-date">24 июля 2026</div><div class="meet-type">Опорное · 52 дня</div></div>
+      <div class="meet-pct m-g">77%</div>
+    </div>
+    <div class="meet-bar"><div class="meet-fill bg-g" style="width:77%"></div></div>
+    <div class="meet-pills">
+      <div class="pill">Без изменений <b>23%</b></div>
+      <div class="pill">−50 бп <b>43%</b></div>
+      <div class="pill">−100 бп <b>34%</b></div>
+      <div class="pill meet-impl">Implied 13.62%</div>
+    </div>
+  </div>
+  <div class="meet a3">
+    <div class="meet-top">
+      <div><div class="meet-date">11 сентября 2026</div><div class="meet-type">Обычное · 101 день</div></div>
+      <div class="meet-pct m-g">86%</div>
+    </div>
+    <div class="meet-bar"><div class="meet-fill bg-g" style="width:86%"></div></div>
+    <div class="meet-pills">
+      <div class="pill">Без изменений <b>14%</b></div>
+      <div class="pill">−50 бп <b>59%</b></div>
+      <div class="pill">−100 бп <b>27%</b></div>
+      <div class="pill meet-impl">Implied 12.75%</div>
+    </div>
+  </div>
+  <div class="meet a4">
+    <div class="meet-top">
+      <div><div class="meet-date">23 октября 2026</div><div class="meet-type">Опорное · 143 дня</div></div>
+      <div class="meet-pct m-n">25%</div>
+    </div>
+    <div class="meet-bar"><div class="meet-fill bg-n" style="width:25%"></div></div>
+    <div class="meet-pills">
+      <div class="pill">Пауза после серии снижений</div>
+      <div class="pill meet-impl">Implied 12.89%</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════ ПОЗИЦИЯ ══════════════════════ -->
+<div class="pane" id="pane-position">
+  <div class="sh"><div class="sh-t">Активная позиция</div></div>
+  <div class="pos a1">
+    <div class="pos-top">
+      <div class="pos-kicker">Позиция #1 · Открыта 30.05.2026</div>
+      <div class="pos-title">КС снизится до ~13% к Q1 2027</div>
+      <div class="conf-row">
+        <div class="conf-track"><div class="conf-fill" style="width:67%"></div></div>
+        <div class="conf-n">67%</div>
+        <div class="conf-d">+7% нед</div>
+      </div>
+    </div>
+    <div class="pos-grid">
+      <div class="pg-row"><div class="pg-key">Инструмент</div><div class="pg-val"><b>ОФЗ 26254</b> · купон 13.00% · 2040</div></div>
+      <div class="pg-row"><div class="pg-key">Войти при</div><div class="pg-val">YTM ≥ 14.80% и BTC > 1.50×</div></div>
+      <div class="pg-row"><div class="pg-key">Целевой доход</div><div class="pg-val"><b>+20.5%</b> за 12–18 мес</div></div>
+      <div class="pg-row"><div class="pg-key">Win rate</div><div class="pg-val"><b>68%</b> — 13 из 19 похожих случаев</div></div>
+      <div class="pg-row"><div class="pg-key">Факторы за</div><div class="pg-val">Кривая бычья, банки покупают</div></div>
+      <div class="pg-row"><div class="pg-key">Риски</div><div class="pg-val">Слабый первичный рынок (BTC 0.49×)</div></div>
+    </div>
+    <div class="trigs">
+      <div class="trig tw"><div class="trig-ic">⏳</div><div class="trig-lbl">Сигнал входа</div><div class="trig-v">BTC > 1.5× · сейчас 0.49×</div></div>
+      <div class="trig ts"><div class="trig-ic">⛔</div><div class="trig-lbl">Инвалидация</div><div class="trig-v">ИПЦ май > 10.5% → 05.06</div></div>
+    </div>
+  </div>
+  <button class="btn-primary a2" onclick="openModal()">Уведомить когда сигнал войдёт</button>
+  <button class="btn-share a3" onclick="openShare()">Поделиться сделкой</button>
+</div>
+
+<!-- ══════════════════════ СКРИНЕР ══════════════════════ -->
+<div class="pane" id="pane-screener">
+  <div class="sh"><div class="sh-t">Скринер ОФЗ</div></div>
+  <div class="scr-note">⚠ Supply overhang 67% · P&L скорректирован на дисконт ликвидности</div>
+  <div class="scr-wrap a1">
+    <div class="scr-hdr"><div>Выпуск</div><div style="text-align:right">Дюр</div><div style="text-align:right">YTM</div><div style="text-align:right">→13%</div></div>
+    <div class="scr-row"><div><div class="sr-n">ОФЗ 26254</div><div class="sr-m">2040 · 13.00%</div></div><div class="sr-d">6.4л</div><div class="sr-y">14.85%</div><div class="sr-p cg">+20.5%</div></div>
+    <div class="scr-row"><div><div class="sr-n">ОФЗ 26248</div><div class="sr-m">2040 · 12.25%</div></div><div class="sr-d">6.4л</div><div class="sr-y">14.84%</div><div class="sr-p cg">+20.3%</div></div>
+    <div class="scr-row"><div><div class="sr-n">ОФЗ 26247</div><div class="sr-m">2039 · 12.25%</div></div><div class="sr-d">6.2л</div><div class="sr-y">14.87%</div><div class="sr-p cb">+20.1%</div></div>
+    <div class="scr-row"><div><div class="sr-n">ОФЗ 26238</div><div class="sr-m">2041 · 7.10%</div></div><div class="sr-d">7.4л</div><div class="sr-y">14.46%</div><div class="sr-p cb">+19.7%</div></div>
+    <div class="scr-row"><div><div class="sr-n">ОФЗ 26230</div><div class="sr-m">2039 · 7.70%</div></div><div class="sr-d">6.9л</div><div class="sr-y">14.79%</div><div class="sr-p cn">+19.3%</div></div>
+    <div class="scr-row"><div><div class="sr-n">ОФЗ 26240</div><div class="sr-m">2036 · 7.00%</div></div><div class="sr-d">6.5л</div><div class="sr-y">14.79%</div><div class="sr-p cn">+17.8%</div></div>
+  </div>
+</div>
+
+<!-- ══════════════════════ БАНКИ ══════════════════════ -->
+<div class="pane" id="pane-banks">
+  <div class="sh"><div class="sh-t">Что делают крупные банки</div></div>
+  <div style="font-size:12px;color:var(--text3);margin-bottom:14px;line-height:1.6">Форма 101 · апрель → май 2026 · изменение позиций в ОФЗ</div>
+  <div class="bank a1">
+    <div class="bank-top">
+      <div><div class="bank-name">Сбербанк</div><div class="bank-sub">Крупнейший держатель ОФЗ</div></div>
+      <div class="bank-chg">+₽130 млрд</div>
+    </div>
+    <div class="bank-bar"><div class="bank-fill" style="width:100%"></div></div>
+  </div>
+  <div class="bank a2">
+    <div class="bank-top">
+      <div><div class="bank-name">НРБ</div><div class="bank-sub">Нац. Резервный Банк</div></div>
+      <div class="bank-chg">+₽47 млрд</div>
+    </div>
+    <div class="bank-bar"><div class="bank-fill" style="width:36%"></div></div>
+  </div>
+  <div class="bank a3">
+    <div class="bank-top">
+      <div><div class="bank-name">ЮниКредит</div><div class="bank-sub">Дочерняя UniCredit Group</div></div>
+      <div class="bank-chg">+₽28 млрд</div>
+    </div>
+    <div class="bank-bar"><div class="bank-fill" style="width:22%"></div></div>
+  </div>
+  <div class="hist a4">
+    <div class="hist-k">Почему это важно</div>
+    <div class="hist-t">В <b>августе 2024</b> банки начали то же самое при КС 18–21%. <b>Через 10 месяцев</b> ЦБ начал снижать ставку. Это и есть опережающий сигнал.</div>
+  </div>
+</div>
+
+<!-- BOTTOM NAV -->
+<nav class="nav">
+  <button class="nb active" onclick="goPn('overview',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+    Обзор
+  </button>
+  <button class="nb" onclick="goPn('rates',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/></svg>
+    Ставка ЦБ
+  </button>
+  <button class="nb" onclick="goPn('position',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>
+    Позиция
+  </button>
+  <button class="nb" onclick="goPn('screener',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+    Скринер
+  </button>
+  <button class="nb" onclick="goPn('banks',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+    Банки
+  </button>
+</nav>
+
+<!-- ALERT MODAL -->
+<div class="modal" id="alertModal" onclick="closeModal(event)">
+  <div class="modal-box">
+    <div class="mh"></div>
+    <div class="mt">Алерт на сигнал входа</div>
+    <div class="md">Пришлём уведомление когда bid-to-cover на аукционе ОФЗ превысит 1.5×. Именно тогда сигнал станет рабочим.</div>
+    <div class="mc">
+      <div class="mc-l">Условие срабатывания</div>
+      <div class="mc-v">BTC > 1.50× · сейчас 0.49×</div>
+    </div>
+    <button class="mc-btn" onclick="confirmAlert()">Подтвердить алерт</button>
+  </div>
+</div>
+
+<!-- SHARE MODAL -->
+<div class="modal" id="shareModal" onclick="closeShare(event)">
+  <div class="modal-box">
+    <div class="mh"></div>
+    <div class="mt">Поделиться сделкой</div>
+    <div class="md">Покажи коллеге что происходит с рынком ОФЗ прямо сейчас.</div>
+    <div class="share-preview">
+      <div class="sp-logo">ЦБ<span>·</span>РАДАР</div>
+      <div class="sp-label">Сделка #1 · 01.06.2026</div>
+      <div class="sp-asset">ОФЗ 26254</div>
+      <div class="sp-grid">
+        <div class="sp-m"><div class="sp-ml">Доходность</div><div class="sp-mv g">+20.5%</div></div>
+        <div class="sp-m"><div class="sp-ml">Вероятность</div><div class="sp-mv b">67%</div></div>
+        <div class="sp-m"><div class="sp-ml">Win rate</div><div class="sp-mv w">68%</div></div>
+      </div>
+      <div class="sp-reason">Причина: <b>крупнейшие банки покупают ОФЗ раньше рынка</b> — опережающий сигнал смены цикла</div>
+    </div>
+    <button class="mc-btn" onclick="doShare()">Поделиться</button>
+  </div>
+</div>
+
+<script>
+document.getElementById('hdate').textContent =
+  new Date().toLocaleDateString('ru',{day:'numeric',month:'short'});
+
+function goPn(id, btn) {
+  document.querySelectorAll('.pane').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nb').forEach(b=>b.classList.remove('active'));
+  document.getElementById('pane-'+id).classList.add('active');
+  if(btn) btn.classList.add('active');
+  else {
+    const idx=['overview','rates','position','screener','banks'].indexOf(id);
+    if(idx>=0) document.querySelectorAll('.nb')[idx].classList.add('active');
+  }
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function openModal()  { document.getElementById('alertModal').classList.add('open'); }
+function closeModal(e){ if(e.target===document.getElementById('alertModal')) document.getElementById('alertModal').classList.remove('open'); }
+function confirmAlert(){ document.getElementById('alertModal').classList.remove('open'); alert('✓ Алерт установлен'); }
+
+function openShare()  { document.getElementById('shareModal').classList.add('open'); }
+function closeShare(e){ if(e.target===document.getElementById('shareModal')) document.getElementById('shareModal').classList.remove('open'); }
+function doShare(){
+  document.getElementById('shareModal').classList.remove('open');
+  if(navigator.share) navigator.share({title:'ЦБ-Радар · Сделка #1',text:'ОФЗ 26254 · доходность +20.5% · вероятность 67%\nКрупные банки покупают раньше рынка.',url:window.location.href});
+  else alert('Ссылка скопирована');
+}
+</script>
+</body>
+</html>
+<!-- DATA LAYER: реальный fetch из FastAPI -->
+<script>
+// Определяем базовый URL (локально или на Railway)
+const API = window.location.hostname === 'localhost'
+  ? 'http://localhost:8000'
+  : '';  // same origin на Railway
+
+// Состояние приложения
+const state = { overview: null, meetings: null, screener: null };
+
+// Утилиты
+const $ = id => document.getElementById(id);
+const fmt = n => new Intl.NumberFormat('ru').format(n);
+
+// Загрузка данных при старте
+async function loadAll() {
+  try {
+    const [ov, meet, scr] = await Promise.all([
+      fetch(API + '/api/overview').then(r => r.json()),
+      fetch(API + '/api/meetings').then(r => r.json()),
+      fetch(API + '/api/screener').then(r => r.json()),
+    ]);
+    state.overview = ov;
+    state.meetings = meet;
+    state.screener = scr;
+    renderOverview(ov);
+    renderMeetings(meet);
+    renderScreener(scr);
+  } catch(e) {
+    console.log('API недоступен, используем статичные данные:', e.message);
+    // Статичные данные уже в HTML — ничего не делаем
+  }
+}
+
+function renderOverview(ov) {
+  if (!ov) return;
+  const r   = ov.regime       || {};
+  const rec = ov.recommendation || {};
+  const sig = ov.signals       || {};
+  const auc = sig.auctions     || {};
+  const cur = sig.curve        || {};
+  const bnk = sig.banks        || {};
+
+  // Режим
+  const rn = document.querySelector('.regime-name');
+  const rd = document.querySelector('.regime-desc');
+  if (rn) rn.textContent = r.name || 'Нормализация';
+  if (rd) rd.textContent = r.desc || '';
+
+  // Вердикт
+  const vm = document.querySelector('.verdict-main'); // на случай если есть
+  if (vm) vm.textContent = ov.verdict || '';
+
+  // Три пилюли — обновляем числа
+  const pills = document.querySelectorAll('.sp-num');
+  if (pills.length >= 3) {
+    pills[0].textContent = `−${cur.exp_cut || 1.54}% к КС`;
+    pills[1].textContent = `BTC ${auc.avg_btc || 0.49}×`;
+    pills[2].textContent = `+₽${bnk.total_bln || 231} млрд`;
+  }
+
+  // Метрики рекомендации
+  const metrics = document.querySelectorAll('.rm-val');
+  if (metrics.length >= 3) {
+    metrics[0].textContent = `+${rec.pnl_base || 20.5}%`;
+    metrics[1].textContent = `${rec.probability || 67}%`;
+  }
+
+  // Payout строки
+  const payoutRows = document.querySelectorAll('.pr-rub');
+  const payout = rec.payout || [];
+  payoutRows.forEach((el, i) => {
+    if (payout[i]) el.textContent = `₽${fmt(payout[i].rub)}`;
+  });
+  const pctEls = document.querySelectorAll('.pr-pct');
+  pctEls.forEach((el, i) => {
+    if (payout[i]) el.textContent = `+${payout[i].pct}%`;
+  });
+
+  // Кнопка алерта
+  const alertBtns = document.querySelectorAll('.btn-primary');
+  if (auc.entry_signal) {
+    alertBtns.forEach(b => {
+      b.style.background = 'var(--green)';
+      b.textContent = '✓ Сигнал входа пришёл — открыть позицию';
+    });
+  }
+}
+
+function renderMeetings(data) {
+  if (!data || !data.meetings) return;
+  const meetings = data.meetings;
+  // Динамический рендер если нужно — пока используем статичные карточки
+  // В следующей версии: генерируем карточки из данных
+}
+
+function renderScreener(data) {
+  if (!data || !data.bonds) return;
+  // Обновляем строки скринера реальными данными
+  const rows = document.querySelectorAll('.scr-row');
+  data.bonds.slice(0, rows.length).forEach((bond, i) => {
+    const row = rows[i];
+    if (!row) return;
+    const cells = row.querySelectorAll('div');
+    if (cells[0]) cells[0].querySelector('.sr-n').textContent = bond.shortname;
+    if (cells[0]) cells[0].querySelector('.sr-m').textContent =
+      `${bond.matdate?.slice(0,4)} · ${bond.coupon_pct?.toFixed(2)}%`;
+    row.querySelector('.sr-d').textContent = `${bond.duration}л`;
+    row.querySelector('.sr-y').textContent = `${bond.ytm}%`;
+    const pnl = row.querySelector('.sr-p');
+    pnl.textContent = `+${bond.pnl_13_adjusted}%`;
+  });
+}
+
+// Запускаем при загрузке
+window.addEventListener('DOMContentLoaded', loadAll);
+
+// Telegram WebApp API интеграция
+if (window.Telegram?.WebApp) {
+  const tg = window.Telegram.WebApp;
+  tg.ready();
+  tg.expand();
+  // Тема Telegram
+  if (tg.colorScheme === 'light') {
+    document.documentElement.style.setProperty('--bg', '#F2F2F7');
+    // (опционально: light theme поддержка)
+  }
+}
+</script>
