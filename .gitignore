@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+data/form101_cache/
+data/gcurve_history_full.csv
+data/gcurve_history.csv
+data/auctions_all.csv
+data/cbr_decisions.csv
+data/ofz26238_prices.csv
+data/form101_history.csv
