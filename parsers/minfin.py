@@ -31,20 +31,42 @@ COLUMNS_MAP = {
 # 1. ЗАГРУЗКА
 # ─────────────────────────────────────────────
 
-def get_latest_file_url():
-    url     = ("https://minfin.gov.ru/ru/perfomance/"
-               "public_debt/internal/operations/ofz/auction/")
+def get_latest_file_url() -> str | None:
+    """
+    Конструируем URL файла аукционов по предсказуемому паттерну.
+    Не скрапим страницу — она блокирует иностранные IP (Railway).
+    
+    Паттерн: /library/YYYY/MM/main/INTERNET_Auction_Results_rus_YYYY_YYYYMMDD.xlsx
+    где YYYYMMDD — дата последнего обновления (обычно конец текущего месяца
+    или дата последнего аукциона).
+    """
+    from datetime import date, timedelta
+    import requests
+
+    today = date.today()
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-    html    = requests.get(url, headers=headers).text
-    soup    = BeautifulSoup(html, "html.parser")
 
-    links = sorted([
-        a["href"] for a in soup.find_all("a", href=True)
-        if "Auction_Results_rus" in a["href"]
-        and a["href"].endswith(".xlsx")
-    ], reverse=True)
+    # Пробуем несколько кандидатов: последние 90 дней с шагом 7 дней
+    candidates = []
+    for days_ago in range(0, 90, 7):
+        d = today - timedelta(days=days_ago)
+        url = (
+            f"https://minfin.gov.ru/common/upload/library/"
+            f"{d.year}/{d.month:02d}/main/"
+            f"INTERNET_Auction_Results_rus_{d.year}_{d.strftime('%Y%m%d')}.xlsx"
+        )
+        candidates.append(url)
 
-    return BASE_URL + links[0] if links else None
+    # Проверяем каждый кандидат HEAD-запросом
+    for url in candidates:
+        try:
+            r = requests.head(url, headers=headers, timeout=10, allow_redirects=True)
+            if r.status_code == 200:
+                return url
+        except Exception:
+            continue
+
+    return None
 
 
 def download_xlsx(url):
