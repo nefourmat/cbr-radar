@@ -29,7 +29,7 @@ class TestParseAuctions:
         df = pd.DataFrame(rows, columns=cols)
         buf = BytesIO()
         with pd.ExcelWriter(buf, engine="openpyxl") as w:
-            df.to_excel(w, index=False, startrow=5)
+            df.to_excel(w, index=False, startrow=5)  # без sheet_name
         buf.seek(0)
         return buf
 

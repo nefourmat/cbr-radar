@@ -1,71 +1,71 @@
 {
-  "generated_at": "2026-06-02T10:46:23.437581",
+  "generated_at": "2026-06-04T13:47:16.155931",
   "key_rate": 14.5,
-  "curve_date": "01.06.2026",
+  "curve_date": "03.06.2026",
   "meetings": [
     {
       "date": "2026-06-19",
       "type": "обычное",
-      "days_ahead": 17,
-      "implied_ks": 14.28,
-      "meeting_cut_bps": 22.0,
-      "prob_cut": 45,
+      "days_ahead": 15,
+      "implied_ks": 14.3,
+      "meeting_cut_bps": 20.0,
+      "prob_cut": 43,
       "scenarios": {
-        "hold": 55,
-        "cut_50": 31,
+        "hold": 57,
+        "cut_50": 30,
         "cut_100": 11
       }
     },
     {
       "date": "2026-07-24",
       "type": "опорное",
-      "days_ahead": 52,
+      "days_ahead": 50,
       "implied_ks": 13.62,
-      "meeting_cut_bps": 66.0,
-      "prob_cut": 77,
+      "meeting_cut_bps": 68.0,
+      "prob_cut": 78,
       "scenarios": {
-        "hold": 23,
-        "cut_50": 42,
+        "hold": 22,
+        "cut_50": 43,
         "cut_100": 27
       }
     },
     {
       "date": "2026-09-11",
       "type": "обычное",
-      "days_ahead": 101,
-      "implied_ks": 12.75,
-      "meeting_cut_bps": 87.0,
-      "prob_cut": 86,
+      "days_ahead": 99,
+      "implied_ks": 12.65,
+      "meeting_cut_bps": 97.0,
+      "prob_cut": 89,
       "scenarios": {
-        "hold": 14,
-        "cut_50": 47,
-        "cut_100": 30
+        "hold": 11,
+        "cut_50": 49,
+        "cut_100": 31
       }
     },
     {
       "date": "2026-10-23",
       "type": "опорное",
-      "days_ahead": 143,
-      "implied_ks": 12.89,
-      "meeting_cut_bps": -14.0,
-      "prob_cut": 25,
+      "days_ahead": 141,
+      "implied_ks": 12.7,
+      "meeting_cut_bps": -5.0,
+      "prob_cut": 28,
       "scenarios": {
-        "hold": 75,
-        "cut_50": 20,
-        "cut_100": 5
+        "hold": 72,
+        "cut_50": 23,
+        "cut_100": 6
       }
     },
     {
       "date": "2026-12-18",
       "type": "обычное",
-      "days_ahead": 199,
-      "implied_ks": 12.71,
-      "meeting_cut_bps": 18.0,
-      "prob_cut": 42,
+      "days_ahead": 197,
+      "implied_ks": 12.44,
+      "meeting_cut_bps": 26.0,
+      "prob_cut": 48,
       "scenarios": {
-        "hold": 58,
-        "cut_50": 29,
-        "cut_100": 10
+        "hold": 52,
+        "cut_50": 34,
+        "cut_100": 12
       }
     }
   ]

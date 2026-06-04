@@ -83,10 +83,15 @@ def get_last_gcurve():
 
 def get_key_rate():
     url = "https://www.cbr.ru/hd_base/KeyRate/"
-    response = requests.get(
-        url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-    )
-    response.raise_for_status()
+    try:
+        response = requests.get(
+            url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"},
+            timeout=10
+        )
+        response.raise_for_status()
+    except requests.exceptions.RequestException:
+        return None
+    
     soup = BeautifulSoup(response.text, "html.parser")
     table = soup.find("table", class_="data")
     if not table:

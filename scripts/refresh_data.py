@@ -227,14 +227,15 @@ def refresh_form101():
 
 def refresh_digest():
     with step("Дайджест"):
-        import subprocess
+        import subprocess, os
+        env = {**os.environ, 'PYTHONIOENCODING': 'utf-8'}
         result = subprocess.run(
             [sys.executable, "digest.py"],
-            capture_output=True, text=True, timeout=60
+            capture_output=True, text=True,
+            timeout=60, encoding='utf-8', env=env
         )
         if result.returncode != 0:
             raise RuntimeError(result.stderr[:200])
-        log.info("  Дайджест обновлён")
 
 
 # ─────────────────────────────────────────────

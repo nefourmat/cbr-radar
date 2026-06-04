@@ -59,7 +59,14 @@ def download_xlsx(url):
 # ─────────────────────────────────────────────
 
 def parse_auctions(file_obj):
-    df = pd.read_excel(file_obj, sheet_name="Лист1", header=5)
+    # Берём первый лист — не зависим от имени
+    try:
+        xl     = pd.ExcelFile(file_obj)
+        sheet  = xl.sheet_names[0]
+        df     = pd.read_excel(xl, sheet_name=sheet, header=5)
+    except Exception:
+        return None
+
     df.columns = [str(c).strip() for c in df.columns]
 
     existing = {k: v for k, v in COLUMNS_MAP.items() if k in df.columns}
