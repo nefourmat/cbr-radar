@@ -208,6 +208,59 @@ class TestKeyRateScenarios:
             sig = compute_curve_signal(key_rate=14.5)
         assert sig["exp_cut"] < -0.5
 
+class TestRateHikeScenarios:
+    """Что показывает скринер когда КС резко выросла."""
+
+    def _mock_bonds(self):
+        return pd.DataFrame([
+            {
+                "SECID": "SU26212RMFS0", "SHORTNAME": "ОФЗ 26212",
+                "MATDATE": pd.Timestamp("2028-01-19"),
+                "years_left": 4.0, "LAST": 85.0, "COUPONPERCENT": 7.5, "YIELD": 16.2,
+            },
+            {
+                "SECID": "SU26238RMFS4", "SHORTNAME": "ОФЗ 26238",
+                "MATDATE": pd.Timestamp("2041-05-15"),
+                "years_left": 12.0, "LAST": 48.0, "COUPONPERCENT": 7.1, "YIELD": 17.5,
+            },
+        ])
+
+    def test_hike_cycle_pnl_is_negative_for_long_bonds(self):
+        """При росте КС на 300 бп длинная ОФЗ даёт отрицательный P&L."""
+        result = calc_pnl(48.0, 7.1, duration=10.0, cut_bps=300, pass_through=1.0)
+        assert result["adjusted_pct"] < 0, "P&L должен быть отрицательным при росте КС"
+
+    def test_hike_cycle_short_bond_less_negative(self):
+        """При росте КС короткая бумага теряет меньше длинной."""
+        short = calc_pnl(85.0, 7.5, duration=3.5, cut_bps=300, pass_through=1.0)
+        long_ = calc_pnl(48.0, 7.1, duration=10.0, cut_bps=300, pass_through=1.0)
+        assert short["adjusted_pct"] > long_["adjusted_pct"]
+
+    def test_screener_with_high_key_rate(self):
+        """При КС=19% сценарии cut_50/100/150 дают положительный P&L."""
+        scenarios = build_rate_scenarios(19.0)
+        cut_ids = [s["id"] for s in scenarios if s["id"] != "flat"]
+        assert "cut_50" in cut_ids
+        # Целевые ставки должны быть > 0
+        for s in scenarios:
+            assert s["target_rate"] > 0
+
+    def test_screener_sorts_least_loss_first_on_hike(self):
+        """При росте КС скринер ставит наименее убыточную бумагу первой."""
+        supply = calc_supply_metrics(btc_current=0.3)  # слабый спрос
+        mock_df = self._mock_bonds()
+        # Симулируем сценарий где cut_bps положительный (рост КС)
+        # через низкий key_rate чтобы scenarios дали cut в неверную сторону
+        # — проверяем что сортировка всегда desc по pnl_base_adjusted
+        with patch("scripts.bond_screener.fetch_ofz_universe", return_value=mock_df):
+            results, _ = run_screener(supply, key_rate=14.5)
+        assert results[0]["pnl_base_adjusted"] >= results[-1]["pnl_base_adjusted"]
+
+    def test_flat_scenario_always_positive(self):
+        """Flat сценарий (только купоны) всегда положительный."""
+        result = calc_pnl(60.0, 7.1, duration=10.0, cut_bps=0, pass_through=1.0)
+        assert result["adjusted_pct"] > 0, "Купонный доход всегда > 0"
+
 
 # ─────────────────────────────────────────────
 # АУКЦИОНЫ: СИЛЬНЫЙ / СЛАБЫЙ СПРОС

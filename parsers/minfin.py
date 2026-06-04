@@ -48,7 +48,7 @@ def get_latest_file_url() -> str | None:
 
     # Пробуем несколько кандидатов: последние 90 дней с шагом 7 дней
     candidates = []
-    for days_ago in range(0, 90, 7):
+    for days_ago in range(0, 120):
         d = today - timedelta(days=days_ago)
         url = (
             f"https://minfin.gov.ru/common/upload/library/"

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-04T21:22:19.729581",
+  "generated_at": "2026-06-05T01:16:28.231950",
   "key_rate": 14.5,
   "key_rate_str": "14.5%",
   "verdict": "Ждать сигнала входа в ОФЗ",
@@ -15,15 +15,15 @@
       "status": "bull",
       "label": "Бычья",
       "arrow": "↑",
-      "exp_cut": 1.75,
-      "y1": 12.75,
-      "y2": 13.16,
-      "y10": 14.88,
-      "slope_2_10": 1.72,
-      "min_yield": 12.75,
+      "exp_cut": 1.59,
+      "y1": 12.91,
+      "y2": 13.24,
+      "y10": 14.9,
+      "slope_2_10": 1.66,
+      "min_yield": 12.91,
       "min_срок": 1.0,
-      "date": "03.06.2026",
-      "description": "1Y = 12.75% при КС 14.5% · ожид. снижение до ~12.8%"
+      "date": "04.06.2026",
+      "description": "1Y = 12.91% при КС 14.5% · ожид. снижение до ~12.9%"
     },
     "auctions": {
       "generated_at": "2026-06-04T20:53:30.395451",
@@ -75,46 +75,49 @@
     }
   },
   "recommendation": {
-    "asset": "ОФЗ 26238",
-    "secid": "SU26238RMFS4",
-    "matdate": "2041-05-15",
-    "coupon": 7.1,
-    "ytm": 14.51,
-    "duration": 7.39,
-    "pnl_base": 19.7,
-    "pnl_flat": 12.4,
-    "probability": 67,
-    "win_rate": 75,
-    "win_rate_n": 3,
-    "win_rate_d": 4,
+    "asset": "ОФЗ 26254",
+    "secid": "SU26254RMFS1",
+    "matdate": "2040-10-03",
+    "coupon": 13.0,
+    "ytm": 14.73,
+    "duration": 6.43,
+    "pnl_base": 16.2,
+    "pnl_flat": 14.0,
+    "probability": 43,
+    "probability_note": "рынок на заседание 2026-06-19",
+    "win_rate": 43,
+    "win_rate_n": 43,
+    "win_rate_d": 100,
     "pass_through": 0.66,
     "supply_pressure": 0.67,
     "entry_signal": false,
     "entry_condition": "BTC > 1.5× · сейчас 0.49×",
-    "invalidation": "ИПЦ за май > 10.5% г/г",
+    "invalidation": "ИПЦ за май выше 10.5% г/г → 2026-06-05",
+    "base_scenario": "КС → 14.0%",
+    "why_text": "G-кривая: рынок ждёт снижения кс до ~12.91%. банки нарастили позиции на ₽340 млрд. на аукционах спрос слабый (btc 0.49×) — ждём btc > 1.5×.",
     "payout": [
       {
         "scenario": "КС без изменений",
-        "rub": 112400,
-        "pct": 12.4,
+        "rub": 114000,
+        "pct": 14.0,
+        "base": false
+      },
+      {
+        "scenario": "КС → 14.0%",
+        "rub": 116200,
+        "pct": 16.2,
+        "base": true
+      },
+      {
+        "scenario": "КС → 13.5%",
+        "rub": 118300,
+        "pct": 18.3,
         "base": false
       },
       {
         "scenario": "КС → 13.0%",
-        "base": true,
-        "rub": 119700,
-        "pct": 19.7
-      },
-      {
-        "scenario": "КС → 12.0%",
-        "rub": 124700,
-        "pct": 24.7,
-        "base": false
-      },
-      {
-        "scenario": "КС → 11.0%",
-        "rub": 129500,
-        "pct": 29.5,
+        "rub": 120400,
+        "pct": 20.4,
         "base": false
       }
     ]
