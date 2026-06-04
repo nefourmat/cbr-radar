@@ -1,7 +1,2 @@
-[build]
-builder = "nixpacks"
-
-[deploy]
-healthcheckPath = "/health"
-healthcheckTimeout = 30
-restartPolicyType = "on_failure"
+[phases.setup]
+aptPkgs = ["p7zip-full"]
