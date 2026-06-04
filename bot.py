@@ -192,9 +192,15 @@ async def job_weekly_digest(bot: Bot):
     log.info("Отправляем еженедельный дайджест...")
 
     try:
-        # Обновляем данные
         import subprocess
-        subprocess.run(["python", "digest.py"], check=True, timeout=120)
+        subprocess.run(
+            [sys.executable, "scripts/refresh_data.py"],
+            check=True, timeout=300,
+        )
+        subprocess.run(
+            [sys.executable, "digest.py"],
+            check=True, timeout=120,
+        )
 
         overview = load_overview()
         text     = format_signal_short(overview)
@@ -221,7 +227,12 @@ async def job_auction_alert(bot: Bot):
     log.info("Проверяем данные аукциона...")
 
     try:
-        # Обновляем данные аукционов
+        import subprocess
+        subprocess.run(
+            [sys.executable, "scripts/refresh_data.py"],
+            check=True, timeout=300,
+        )
+
         overview = load_overview()
         sigs     = overview.get("signals", {})
         auctions = sigs.get("auctions", {})

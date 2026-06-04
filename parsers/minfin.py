@@ -118,6 +118,94 @@ def parse_auctions(file_obj):
     return df
 
 
+BTC_NORMAL = 1.5
+
+
+def _supply_metrics(avg_btc: float) -> tuple[float, float]:
+    sp = max(0.0, min(1.0, 1 - avg_btc / BTC_NORMAL))
+    pt = 1.0 - sp * 0.5
+    return round(sp, 2), round(pt, 2)
+
+
+def build_auction_signal(df, last_n_weeks=4) -> dict:
+    """Полный сигнал аукционов для API и кэша."""
+    cutoff = df["дата"].max() - pd.Timedelta(weeks=last_n_weeks)
+    recent = df[df["дата"] >= cutoff].copy()
+    if recent.empty:
+        raise ValueError("Нет аукционов за последние недели")
+
+    last     = recent.iloc[0]
+    avg_btc  = float(recent["bid_to_cover"].mean())
+    long_df  = recent[recent["лет_до_погашения"] > 7]
+    long_btc = float(long_df["bid_to_cover"].mean()) if not long_df.empty else avg_btc
+    yield_trend = float(
+        recent["доходность_пct"].iloc[0] - recent["доходность_пct"].iloc[-1]
+    )
+    sp, pt = _supply_metrics(avg_btc)
+    entry  = avg_btc >= BTC_NORMAL
+
+    if avg_btc >= 1.5:
+        status, label, arrow = "bull", "Сильный спрос", "↑"
+    elif avg_btc >= 1.0:
+        status, label, arrow = "neu", "Умеренный спрос", "→"
+    else:
+        status, label, arrow = "neu", "Слабый спрос", "↓"
+
+    return {
+        "status":          status,
+        "label":           label,
+        "arrow":           arrow,
+        "avg_btc":         round(avg_btc, 2),
+        "long_btc":        round(long_btc, 2),
+        "last_btc":        round(float(last["bid_to_cover"]), 2),
+        "last_date":       last["дата"].strftime("%d.%m.%Y"),
+        "last_code":       str(last["код_выпуска"]),
+        "last_yield":      round(float(last["доходность_пct"]), 2),
+        "last_demand_mln": int(last["спрос_млн"]),
+        "yield_trend":     round(yield_trend, 2),
+        "supply_pressure": sp,
+        "pass_through":    pt,
+        "entry_signal":    entry,
+        "description": (
+            f"BTC {avg_btc:.2f}× за {last_n_weeks} нед · "
+            f"последний {last['код_выпуска']} {last['доходность_пct']:.2f}%"
+        ),
+    }
+
+
+def enrich_auction_cache(cached: dict) -> dict:
+    """Дополняет минимальный кэш до полного формата API."""
+    if cached.get("status"):
+        return cached
+
+    avg_btc = cached.get("avg_btc", 0.5)
+    sp, pt  = _supply_metrics(avg_btc)
+    if avg_btc >= 1.5:
+        status, label, arrow = "bull", "Сильный спрос", "↑"
+    elif avg_btc >= 1.0:
+        status, label, arrow = "neu", "Умеренный спрос", "→"
+    else:
+        status, label, arrow = "neu", "Слабый спрос", "↓"
+
+    return {
+        **cached,
+        "status":          status,
+        "label":           label,
+        "arrow":           arrow,
+        "long_btc":        cached.get("long_btc", avg_btc),
+        "last_code":       cached.get("last_code", "—"),
+        "last_demand_mln": cached.get("last_demand_mln", 0),
+        "supply_pressure": cached.get("supply_pressure", sp),
+        "pass_through":    cached.get("pass_through", pt),
+        "entry_signal":    cached.get("entry_signal", avg_btc >= BTC_NORMAL),
+        "description":     cached.get(
+            "description",
+            f"BTC {avg_btc:.2f}× · тренд доходности "
+            f"{cached.get('yield_trend', 0):+.2f}%",
+        ),
+    }
+
+
 # ─────────────────────────────────────────────
 # 3. СИГНАЛ — ПИРАМИДА МИНТО
 # ─────────────────────────────────────────────

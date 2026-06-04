@@ -12,17 +12,17 @@ main.py — FastAPI бэкенд ЦБ-Радар
 """
 
 import json
-from fastapi.responses import JSONResponse
-import json
 import logging
+import os
 import sys
 import subprocess
+from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, List
 
 import pandas as pd
-from fastapi import FastAPI
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -32,7 +32,10 @@ from pydantic import BaseModel, Field
 sys.path.insert(0, str(Path(__file__).parent))
 
 from parsers.gcurve import get_last_gcurve, get_key_rate
-from parsers.minfin import get_latest_file_url, download_xlsx, parse_auctions
+from parsers.minfin import (
+    get_latest_file_url, download_xlsx, parse_auctions,
+    build_auction_signal, enrich_auction_cache,
+)
 
 # ─────────────────────────────────────────────
 # ЛОГИРОВАНИЕ
@@ -192,61 +195,6 @@ class HealthResponse(BaseModel):
 
 
 # ─────────────────────────────────────────────
-# ПРИЛОЖЕНИЕ
-# ─────────────────────────────────────────────
-
-app = FastAPI(
-    title="ЦБ-Радар API",
-    description="Bloomberg для рублёвых облигаций",
-    version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
-)
-
-
-
-class UTF8JSONResponse(JSONResponse):
-    def render(self, content) -> bytes:
-        return json.dumps(
-            content, ensure_ascii=False, indent=2, default=str
-        ).encode("utf-8")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["GET"],
-    allow_headers=["*"],
-)
-
-app.mount("/static", StaticFiles(directory="static"), name="static")
-
-DATA_DIR = Path("data")
-DATA_DIR.mkdir(exist_ok=True)
-
-
-# ─────────────────────────────────────────────
-# КЭШИРОВАНИЕ
-# ─────────────────────────────────────────────
-
-def read_cache(filename: str, max_age_hours: float = 24) -> Optional[dict]:
-    path = DATA_DIR / filename
-    if not path.exists():
-        return None
-    age_h = (datetime.now().timestamp() - path.stat().st_mtime) / 3600
-    if age_h > max_age_hours:
-        log.debug(f"Кэш {filename} устарел ({age_h:.1f}ч > {max_age_hours}ч)")
-        return None
-    with open(path, encoding="utf-8") as f:
-        return json.load(f)
-
-
-def write_cache(filename: str, data: dict):
-    with open(DATA_DIR / filename, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2, default=str)
-    log.debug(f"Кэш записан: {filename}")
-
-
-# ─────────────────────────────────────────────
 # APSCHEDULER — автообновление данных
 # ─────────────────────────────────────────────
 
@@ -277,11 +225,9 @@ def run_refresh():
         log.error(f"Scheduler: ошибка запуска refresh_data.py: {e}")
 
 
-@app.on_event("startup")
-def startup_event():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     log.info("Запуск ЦБ-Радар API...")
-
-    # Ежедневное обновление 08:00 МСК
     scheduler.add_job(
         run_refresh,
         trigger="cron",
@@ -289,8 +235,6 @@ def startup_event():
         id="daily_refresh",
         replace_existing=True,
     )
-
-    # Среда 13:30 МСК — после окончания аукционов
     scheduler.add_job(
         run_refresh,
         trigger="cron",
@@ -299,15 +243,69 @@ def startup_event():
         id="auction_refresh",
         replace_existing=True,
     )
-
     scheduler.start()
     log.info("APScheduler запущен: обновление в 08:00 и Ср 13:30 МСК")
-
-
-@app.on_event("shutdown")
-def shutdown_event():
+    yield
     scheduler.shutdown(wait=False)
     log.info("APScheduler остановлен")
+
+
+# ─────────────────────────────────────────────
+# ПРИЛОЖЕНИЕ
+# ─────────────────────────────────────────────
+
+app = FastAPI(
+    title="ЦБ-Радар API",
+    description="Bloomberg для рублёвых облигаций",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    lifespan=lifespan,
+)
+
+
+
+class UTF8JSONResponse(JSONResponse):
+    def render(self, content) -> bytes:
+        return json.dumps(
+            content, ensure_ascii=False, indent=2, default=str
+        ).encode("utf-8")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["GET"],
+    allow_headers=["*"],
+)
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+DATA_DIR = Path("data")
+DATA_DIR.mkdir(exist_ok=True)
+
+CACHE_CLEAR_TOKEN = os.getenv("CACHE_CLEAR_TOKEN", "")
+
+
+# ─────────────────────────────────────────────
+# КЭШИРОВАНИЕ
+# ─────────────────────────────────────────────
+
+def read_cache(filename: str, max_age_hours: float = 24) -> Optional[dict]:
+    path = DATA_DIR / filename
+    if not path.exists():
+        return None
+    age_h = (datetime.now().timestamp() - path.stat().st_mtime) / 3600
+    if age_h > max_age_hours:
+        log.debug(f"Кэш {filename} устарел ({age_h:.1f}ч > {max_age_hours}ч)")
+        return None
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def write_cache(filename: str, data: dict):
+    with open(DATA_DIR / filename, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2, default=str)
+    log.debug(f"Кэш записан: {filename}")
 
 
 # ─────────────────────────────────────────────
@@ -348,13 +346,24 @@ def compute_curve_signal(key_rate: float) -> dict:
     }
 
 
+def _neutral_auction_signal() -> dict:
+    return {
+        "status": "neu", "label": "Нет данных", "arrow": "→",
+        "avg_btc": 0.49, "long_btc": 0.45,
+        "last_btc": 0.26, "last_date": "—", "last_code": "—",
+        "last_yield": 0.0, "last_demand_mln": 0,
+        "yield_trend": 0.0, "supply_pressure": 0.67,
+        "pass_through": 0.66, "entry_signal": False,
+        "description": "Данные аукционов временно недоступны",
+    }
+
+
 def compute_auction_signal() -> dict:
     log.debug("Вычисляем аукционный сигнал")
 
-    # Сначала пробуем кэш
     cached = read_cache("auctions_latest.json", max_age_hours=12)
     if cached:
-        return cached
+        return enrich_auction_cache(cached)
 
     try:
         url = get_latest_file_url()
@@ -362,19 +371,19 @@ def compute_auction_signal() -> dict:
             raise ValueError("Минфин не вернул URL файла")
         xlsx = download_xlsx(url)
         df   = parse_auctions(xlsx)
-        ...
+        if df is None or df.empty:
+            raise ValueError("Пустые данные аукционов")
+
+        signal = build_auction_signal(df)
+        write_cache("auctions_latest.json", {
+            "generated_at": datetime.now().isoformat(),
+            **signal,
+        })
+        df.to_csv(DATA_DIR / "auctions_all.csv", index=False)
+        return signal
     except Exception as e:
         log.error(f"Аукционы недоступны: {e}")
-        # Возвращаем нейтральный сигнал вместо пустого dict
-        return {
-            "status": "neu", "label": "Нет данных", "arrow": "→",
-            "avg_btc": 0.49, "long_btc": 0.45,
-            "last_btc": 0.26, "last_date": "—", "last_code": "—",
-            "last_yield": 0.0, "last_demand_mln": 0,
-            "yield_trend": 0.0, "supply_pressure": 0.67,
-            "pass_through": 0.66, "entry_signal": False,
-            "description": "Данные аукционов временно недоступны",
-        }
+        return _neutral_auction_signal()
 
 
 def compute_banks_signal() -> dict:
@@ -546,7 +555,7 @@ async def get_overview():
     curve    = compute_curve_signal(key_rate)
     auctions = compute_auction_signal()
     banks    = compute_banks_signal()
-    regime   = compute_regime(curve, auctions)
+    regime   = compute_regime(curve, auctions, banks)
     rec      = compute_recommendation(key_rate, auctions, banks)
 
     entry = auctions.get("entry_signal", False)
@@ -617,7 +626,9 @@ async def get_digest():
 
 
 @app.post("/api/cache/clear")
-async def clear_cache():
+async def clear_cache(x_cache_token: str = Header(default="", alias="X-Cache-Token")):
+    if CACHE_CLEAR_TOKEN and x_cache_token != CACHE_CLEAR_TOKEN:
+        raise HTTPException(status_code=403, detail="Forbidden")
     for f in DATA_DIR.glob("api_*.json"):
         f.unlink()
     log.info("Кэш очищен")

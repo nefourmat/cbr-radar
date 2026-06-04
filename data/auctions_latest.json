@@ -1,0 +1,18 @@
+{
+  "generated_at": "2026-06-04T20:53:30.395451",
+  "status": "neu",
+  "label": "Слабый спрос",
+  "arrow": "↓",
+  "avg_btc": 0.49,
+  "long_btc": 0.45,
+  "last_btc": 0.26,
+  "last_date": "27.05.2026",
+  "last_code": "26230RMFS",
+  "last_yield": 14.8,
+  "last_demand_mln": 67460,
+  "yield_trend": 0.6,
+  "supply_pressure": 0.67,
+  "pass_through": 0.66,
+  "entry_signal": false,
+  "description": "BTC 0.49× за 4 нед · последний 26230RMFS 14.80%"
+}

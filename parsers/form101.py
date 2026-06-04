@@ -25,6 +25,8 @@ BANKS_FALLBACK = {
 SEVENZIP_PATHS = [
     r"C:\Program Files\7-Zip\7z.exe",
     r"C:\Program Files (x86)\7-Zip\7z.exe",
+    "/usr/bin/7z",
+    "/usr/bin/7za",
     "7z", "7za",
 ]
 
@@ -267,8 +269,11 @@ def get_full_bank_registry():
             return dict(zip(df["regn"], df["name"]))
 
     print("  Скачиваем реестр банков с ЦБ...")
-    url = ("https://www.cbr.ru/Queries/UniDbQuery/DownloadExcel/98547"
-           "?FromDate=03%2F24%2F2026&ToDate=03%2F24%2F2026&posted=True")
+    today = datetime.now().strftime("%m/%d/%Y")
+    url = (
+        "https://www.cbr.ru/Queries/UniDbQuery/DownloadExcel/98547"
+        f"?FromDate={today.replace('/', '%2F')}&ToDate={today.replace('/', '%2F')}&posted=True"
+    )
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
 
     try:

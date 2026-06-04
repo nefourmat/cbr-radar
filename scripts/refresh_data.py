@@ -82,33 +82,26 @@ def refresh_gcurve():
 
 def refresh_auctions():
     with step("Аукционы Минфина"):
-        import pandas as pd
-        from parsers.minfin import get_latest_file_url, download_xlsx, parse_auctions
+        from parsers.minfin import (
+            get_latest_file_url, download_xlsx, parse_auctions,
+            build_auction_signal,
+        )
 
         url  = get_latest_file_url()
+        if not url:
+            raise ValueError("Минфин не вернул URL файла")
         xlsx = download_xlsx(url)
         df   = parse_auctions(xlsx)
         assert df is not None and not df.empty, "Пустые данные аукционов"
 
-        cutoff = df["дата"].max() - pd.Timedelta(weeks=4)
-        recent = df[df["дата"] >= cutoff]
-
-        avg_btc     = float(recent["bid_to_cover"].mean())
-        yield_trend = float(
-            recent["доходность_пct"].iloc[0] - recent["доходность_пct"].iloc[-1]
-        )
-
-        result = {
-            "generated_at":  datetime.now().isoformat(),
-            "avg_btc":       round(avg_btc, 2),
-            "yield_trend":   round(yield_trend, 2),
-            "last_date":     recent.iloc[0]["дата"].strftime("%d.%m.%Y"),
-            "last_btc":      round(float(recent.iloc[0]["bid_to_cover"]), 2),
-            "last_yield":    float(recent.iloc[0]["доходность_пct"]),
-            "entry_signal":  avg_btc >= 1.5,
-        }
+        signal = build_auction_signal(df)
+        result = {"generated_at": datetime.now().isoformat(), **signal}
         _write("auctions_latest.json", result)
-        log.info(f"  BTC = {avg_btc:.2f}×, тренд доходности = {yield_trend:+.2f}%")
+        df.to_csv(DATA_DIR / "auctions_all.csv", index=False)
+        log.info(
+            f"  BTC = {signal['avg_btc']:.2f}×, "
+            f"тренд доходности = {signal['yield_trend']:+.2f}%"
+        )
 
 
 # ─────────────────────────────────────────────
