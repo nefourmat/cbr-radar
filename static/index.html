@@ -381,34 +381,34 @@ body {
 
   <!-- Режим рынка -->
   <div class="regime a1">
-    <div class="regime-kicker">Режим рынка · Неделя 23</div>
+    <div class="regime-kicker" id="regime-kicker">Режим рынка</div>
     <div class="regime-row">
-      <div class="regime-dot"></div>
-      <div class="regime-name">Нормализация</div>
+      <div class="regime-dot" id="regime-dot"></div>
+      <div class="regime-name" id="regime-name">Загрузка…</div>
     </div>
-    <div class="regime-desc">Ставка снижается. Рынок ждёт следующего шага. Хорошее время изучить позицию — но ещё не открывать.</div>
-    <div class="regime-hint">Похожие периоды: 2016 (снижение с 17%), 2019 (снижение с 7.75%)</div>
+    <div class="regime-desc" id="regime-desc"></div>
+    <div class="regime-hint" id="regime-hint"></div>
   </div>
 
   <!-- Три сигнала -->
-  <div class="strip a2">
+  <div class="strip a2" id="signal-strip">
     <div class="sp g" onclick="goPn('rates')">
       <div class="sp-ic">📈</div>
       <div class="sp-lbl">Кривая</div>
-      <div class="sp-val">Бычья ↑</div>
-      <div class="sp-num">−1.54% к КС</div>
+      <div class="sp-val" id="sig-curve-label">—</div>
+      <div class="sp-num" id="sig-curve-num">—</div>
     </div>
     <div class="sp r">
       <div class="sp-ic">🏦</div>
       <div class="sp-lbl">Аукционы</div>
-      <div class="sp-val">Слабые ↓</div>
-      <div class="sp-num">BTC 0.49×</div>
+      <div class="sp-val" id="sig-auc-label">—</div>
+      <div class="sp-num" id="sig-auc-num">—</div>
     </div>
     <div class="sp g" onclick="goPn('banks')">
       <div class="sp-ic">🏛</div>
       <div class="sp-lbl">Банки</div>
-      <div class="sp-val">Покупают ↑</div>
-      <div class="sp-num">+₽231 млрд</div>
+      <div class="sp-val" id="sig-bank-label">—</div>
+      <div class="sp-num" id="sig-bank-num">—</div>
     </div>
   </div>
 
@@ -416,23 +416,23 @@ body {
   <div class="rec a3">
     <div class="rec-top">
       <div class="rec-kicker">Лучшая сделка недели</div>
-      <div class="rec-title">ОФЗ 26254</div>
-      <div class="rec-sub">Погашение 2040 · Купон 13.00% · Дюрация 6.4 лет</div>
+      <div class="rec-title" id="rec-title">Загрузка…</div>
+      <div class="rec-sub" id="rec-sub"></div>
     </div>
     <div class="rec-metrics">
       <div class="rm">
         <div class="rm-label">Доходность</div>
-        <div class="rm-val green">+20.5%</div>
-        <div class="rm-note">при КС → 13%</div>
+        <div class="rm-val green" id="rec-pnl">—</div>
+        <div class="rm-note" id="rec-pnl-note">базовый сценарий</div>
       </div>
       <div class="rm">
         <div class="rm-label">Вероятность</div>
-        <div class="rm-val blue">67%</div>
-        <div class="rm-note">13 из 19 случаев</div>
+        <div class="rm-val blue" id="rec-prob">—</div>
+        <div class="rm-note" id="rec-prob-note">ближайшее заседание</div>
       </div>
       <div class="rm">
         <div class="rm-label">Без изменений</div>
-        <div class="rm-val" style="color:var(--text2)">+14.1%</div>
+        <div class="rm-val" style="color:var(--text2)" id="rec-flat">—</div>
         <div class="rm-note">только купон</div>
       </div>
     </div>
@@ -441,39 +441,20 @@ body {
   <!-- Почему -->
   <div class="why a3">
     <div class="why-label">⚡ Почему сейчас</div>
-    <div class="why-text">Крупнейшие банки <b>нарастили позиции в ОФЗ</b> на ₽231 млрд за месяц. Исторически такие покупки <b>предшествовали снижению ставки с опережением 10 месяцев</b>. Сигнал входа ещё не пришёл — ждём подтверждения на аукционе.</div>
+    <div class="why-text" id="why-text">Загрузка аналитики…</div>
   </div>
 
   <!-- Что заработаю -->
   <div class="payout a4">
     <div class="payout-header">
       <div class="payout-title">Что будет с ₽100,000 через 18 мес</div>
-      <div class="payout-sub">ОФЗ 26254 · с поправкой на текущий рынок</div>
+      <div class="payout-sub" id="payout-sub">расчёт по лучшей бумаге недели</div>
     </div>
-    <div class="payout-row">
-      <div class="pr-label">КС без изменений</div>
-      <div class="pr-rub n">₽114,100</div>
-      <div class="pr-pct">+14.1%</div>
-    </div>
-    <div class="payout-row highlight">
-      <div class="pr-label">КС снизится до 13% <span class="pr-badge">Базовый</span></div>
-      <div class="pr-rub b">₽120,500</div>
-      <div class="pr-pct">+20.5%</div>
-    </div>
-    <div class="payout-row">
-      <div class="pr-label">КС снизится до 12%</div>
-      <div class="pr-rub g">₽129,200</div>
-      <div class="pr-pct">+29.2%</div>
-    </div>
-    <div class="payout-row">
-      <div class="pr-label">КС снизится до 11%</div>
-      <div class="pr-rub g">₽138,000</div>
-      <div class="pr-pct">+38.0%</div>
-    </div>
+    <div id="payout-rows"></div>
   </div>
 
   <!-- CTA -->
-  <button class="btn-primary a5" onclick="openModal()">
+  <button class="btn-primary a5" id="btn-primary" onclick="openModal()">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
     Уведомить когда сигнал войдёт
   </button>
@@ -523,56 +504,7 @@ body {
 <div class="pane" id="pane-rates">
   <div class="sh"><div class="sh-t">Ставки рынка на заседания</div></div>
   <div style="font-size:12px;color:var(--text3);margin-bottom:14px;line-height:1.6">Implied forward rates из G-кривой · аналог CME FedWatch</div>
-  <div class="meet a1">
-    <div class="meet-top">
-      <div><div class="meet-date">19 июня 2026</div><div class="meet-type">Обычное · 17 дней</div></div>
-      <div class="meet-pct m-a">45%</div>
-    </div>
-    <div class="meet-bar"><div class="meet-fill bg-a" style="width:45%"></div></div>
-    <div class="meet-pills">
-      <div class="pill">Без изменений <b>55%</b></div>
-      <div class="pill">−50 бп <b>31%</b></div>
-      <div class="pill">−100 бп <b>14%</b></div>
-      <div class="pill meet-impl">Implied 14.28%</div>
-    </div>
-  </div>
-  <div class="meet a2">
-    <div class="meet-top">
-      <div><div class="meet-date">24 июля 2026</div><div class="meet-type">Опорное · 52 дня</div></div>
-      <div class="meet-pct m-g">77%</div>
-    </div>
-    <div class="meet-bar"><div class="meet-fill bg-g" style="width:77%"></div></div>
-    <div class="meet-pills">
-      <div class="pill">Без изменений <b>23%</b></div>
-      <div class="pill">−50 бп <b>43%</b></div>
-      <div class="pill">−100 бп <b>34%</b></div>
-      <div class="pill meet-impl">Implied 13.62%</div>
-    </div>
-  </div>
-  <div class="meet a3">
-    <div class="meet-top">
-      <div><div class="meet-date">11 сентября 2026</div><div class="meet-type">Обычное · 101 день</div></div>
-      <div class="meet-pct m-g">86%</div>
-    </div>
-    <div class="meet-bar"><div class="meet-fill bg-g" style="width:86%"></div></div>
-    <div class="meet-pills">
-      <div class="pill">Без изменений <b>14%</b></div>
-      <div class="pill">−50 бп <b>59%</b></div>
-      <div class="pill">−100 бп <b>27%</b></div>
-      <div class="pill meet-impl">Implied 12.75%</div>
-    </div>
-  </div>
-  <div class="meet a4">
-    <div class="meet-top">
-      <div><div class="meet-date">23 октября 2026</div><div class="meet-type">Опорное · 143 дня</div></div>
-      <div class="meet-pct m-n">25%</div>
-    </div>
-    <div class="meet-bar"><div class="meet-fill bg-n" style="width:25%"></div></div>
-    <div class="meet-pills">
-      <div class="pill">Пауза после серии снижений</div>
-      <div class="pill meet-impl">Implied 12.89%</div>
-    </div>
-  </div>
+  <div id="meetings-list"><div style="color:var(--text3);padding:20px 0">Загрузка заседаний…</div></div>
 </div>
 
 <!-- ══════════════════════ ПОЗИЦИЯ ══════════════════════ -->
@@ -580,25 +512,17 @@ body {
   <div class="sh"><div class="sh-t">Активная позиция</div></div>
   <div class="pos a1">
     <div class="pos-top">
-      <div class="pos-kicker">Позиция #1 · Открыта 30.05.2026</div>
-      <div class="pos-title">КС снизится до ~13% к Q1 2027</div>
+      <div class="pos-kicker" id="pos-kicker">Рекомендация недели</div>
+      <div class="pos-title" id="pos-title">—</div>
       <div class="conf-row">
-        <div class="conf-track"><div class="conf-fill" style="width:67%"></div></div>
-        <div class="conf-n">67%</div>
-        <div class="conf-d">+7% нед</div>
+        <div class="conf-track"><div class="conf-fill" id="pos-conf-fill" style="width:0%"></div></div>
+        <div class="conf-n" id="pos-conf">—</div>
       </div>
     </div>
-    <div class="pos-grid">
-      <div class="pg-row"><div class="pg-key">Инструмент</div><div class="pg-val"><b>ОФЗ 26254</b> · купон 13.00% · 2040</div></div>
-      <div class="pg-row"><div class="pg-key">Войти при</div><div class="pg-val">YTM ≥ 14.80% и BTC > 1.50×</div></div>
-      <div class="pg-row"><div class="pg-key">Целевой доход</div><div class="pg-val"><b>+20.5%</b> за 12–18 мес</div></div>
-      <div class="pg-row"><div class="pg-key">Win rate</div><div class="pg-val"><b>68%</b> — 13 из 19 похожих случаев</div></div>
-      <div class="pg-row"><div class="pg-key">Факторы за</div><div class="pg-val">Кривая бычья, банки покупают</div></div>
-      <div class="pg-row"><div class="pg-key">Риски</div><div class="pg-val">Слабый первичный рынок (BTC 0.49×)</div></div>
-    </div>
+    <div class="pos-grid" id="pos-grid"></div>
     <div class="trigs">
-      <div class="trig tw"><div class="trig-ic">⏳</div><div class="trig-lbl">Сигнал входа</div><div class="trig-v">BTC > 1.5× · сейчас 0.49×</div></div>
-      <div class="trig ts"><div class="trig-ic">⛔</div><div class="trig-lbl">Инвалидация</div><div class="trig-v">ИПЦ май > 10.5% → 05.06</div></div>
+      <div class="trig tw"><div class="trig-ic">⏳</div><div class="trig-lbl">Сигнал входа</div><div class="trig-v" id="pos-entry">—</div></div>
+      <div class="trig ts"><div class="trig-ic">⛔</div><div class="trig-lbl">Инвалидация</div><div class="trig-v" id="pos-inval">—</div></div>
     </div>
   </div>
   <button class="btn-primary a2" onclick="openModal()">Уведомить когда сигнал войдёт</button>
@@ -608,46 +532,21 @@ body {
 <!-- ══════════════════════ СКРИНЕР ══════════════════════ -->
 <div class="pane" id="pane-screener">
   <div class="sh"><div class="sh-t">Скринер ОФЗ</div></div>
-  <div class="scr-note">⚠ Supply overhang 67% · P&L скорректирован на дисконт ликвидности</div>
+  <div class="scr-note" id="scr-note">Загрузка скринера…</div>
   <div class="scr-wrap a1">
-    <div class="scr-hdr"><div>Выпуск</div><div style="text-align:right">Дюр</div><div style="text-align:right">YTM</div><div style="text-align:right">→13%</div></div>
-    <div class="scr-row"><div><div class="sr-n">ОФЗ 26254</div><div class="sr-m">2040 · 13.00%</div></div><div class="sr-d">6.4л</div><div class="sr-y">14.85%</div><div class="sr-p cg">+20.5%</div></div>
-    <div class="scr-row"><div><div class="sr-n">ОФЗ 26248</div><div class="sr-m">2040 · 12.25%</div></div><div class="sr-d">6.4л</div><div class="sr-y">14.84%</div><div class="sr-p cg">+20.3%</div></div>
-    <div class="scr-row"><div><div class="sr-n">ОФЗ 26247</div><div class="sr-m">2039 · 12.25%</div></div><div class="sr-d">6.2л</div><div class="sr-y">14.87%</div><div class="sr-p cb">+20.1%</div></div>
-    <div class="scr-row"><div><div class="sr-n">ОФЗ 26238</div><div class="sr-m">2041 · 7.10%</div></div><div class="sr-d">7.4л</div><div class="sr-y">14.46%</div><div class="sr-p cb">+19.7%</div></div>
-    <div class="scr-row"><div><div class="sr-n">ОФЗ 26230</div><div class="sr-m">2039 · 7.70%</div></div><div class="sr-d">6.9л</div><div class="sr-y">14.79%</div><div class="sr-p cn">+19.3%</div></div>
-    <div class="scr-row"><div><div class="sr-n">ОФЗ 26240</div><div class="sr-m">2036 · 7.00%</div></div><div class="sr-d">6.5л</div><div class="sr-y">14.79%</div><div class="sr-p cn">+17.8%</div></div>
+    <div class="scr-hdr"><div>Выпуск</div><div style="text-align:right">Дюр</div><div style="text-align:right">YTM</div><div style="text-align:right" id="scr-col-pnl">P&L</div></div>
+    <div id="screener-rows"></div>
   </div>
 </div>
 
 <!-- ══════════════════════ БАНКИ ══════════════════════ -->
 <div class="pane" id="pane-banks">
   <div class="sh"><div class="sh-t">Что делают крупные банки</div></div>
-  <div style="font-size:12px;color:var(--text3);margin-bottom:14px;line-height:1.6">Форма 101 · апрель → май 2026 · изменение позиций в ОФЗ</div>
-  <div class="bank a1">
-    <div class="bank-top">
-      <div><div class="bank-name">Сбербанк</div><div class="bank-sub">Крупнейший держатель ОФЗ</div></div>
-      <div class="bank-chg">+₽130 млрд</div>
-    </div>
-    <div class="bank-bar"><div class="bank-fill" style="width:100%"></div></div>
-  </div>
-  <div class="bank a2">
-    <div class="bank-top">
-      <div><div class="bank-name">НРБ</div><div class="bank-sub">Нац. Резервный Банк</div></div>
-      <div class="bank-chg">+₽47 млрд</div>
-    </div>
-    <div class="bank-bar"><div class="bank-fill" style="width:36%"></div></div>
-  </div>
-  <div class="bank a3">
-    <div class="bank-top">
-      <div><div class="bank-name">ЮниКредит</div><div class="bank-sub">Дочерняя UniCredit Group</div></div>
-      <div class="bank-chg">+₽28 млрд</div>
-    </div>
-    <div class="bank-bar"><div class="bank-fill" style="width:22%"></div></div>
-  </div>
+  <div style="font-size:12px;color:var(--text3);margin-bottom:14px;line-height:1.6" id="banks-subtitle">Форма 101 · изменение позиций в долговых ЦБ</div>
+  <div id="banks-list"><div style="color:var(--text3);padding:12px 0">Загрузка…</div></div>
   <div class="hist a4">
     <div class="hist-k">Почему это важно</div>
-    <div class="hist-t">В <b>августе 2024</b> банки начали то же самое при КС 18–21%. <b>Через 10 месяцев</b> ЦБ начал снижать ставку. Это и есть опережающий сигнал.</div>
+    <div class="hist-t">Наращивание позиций банков в долговых ЦБ часто <b>опережает</b> решения ЦБ на несколько месяцев — это один из опережающих сигналов в модели.</div>
   </div>
 </div>
 
@@ -683,7 +582,7 @@ body {
     <div class="md">Пришлём уведомление когда bid-to-cover на аукционе ОФЗ превысит 1.5×. Именно тогда сигнал станет рабочим.</div>
     <div class="mc">
       <div class="mc-l">Условие срабатывания</div>
-      <div class="mc-v">BTC > 1.50× · сейчас 0.49×</div>
+      <div class="mc-v" id="modal-btc">BTC > 1.50×</div>
     </div>
     <button class="mc-btn" onclick="confirmAlert()">Подтвердить алерт</button>
   </div>
@@ -697,14 +596,14 @@ body {
     <div class="md">Покажи коллеге что происходит с рынком ОФЗ прямо сейчас.</div>
     <div class="share-preview">
       <div class="sp-logo">ЦБ<span>·</span>РАДАР</div>
-      <div class="sp-label">Сделка #1 · 01.06.2026</div>
-      <div class="sp-asset">ОФЗ 26254</div>
+      <div class="sp-label" id="share-label">Сделка недели</div>
+      <div class="sp-asset" id="share-asset">—</div>
       <div class="sp-grid">
-        <div class="sp-m"><div class="sp-ml">Доходность</div><div class="sp-mv g">+20.5%</div></div>
-        <div class="sp-m"><div class="sp-ml">Вероятность</div><div class="sp-mv b">67%</div></div>
-        <div class="sp-m"><div class="sp-ml">Win rate</div><div class="sp-mv w">68%</div></div>
+        <div class="sp-m"><div class="sp-ml">Доходность</div><div class="sp-mv g" id="share-pnl">—</div></div>
+        <div class="sp-m"><div class="sp-ml">Вероятность</div><div class="sp-mv b" id="share-prob">—</div></div>
+        <div class="sp-m"><div class="sp-ml">Режим</div><div class="sp-mv w" id="share-regime">—</div></div>
       </div>
-      <div class="sp-reason">Причина: <b>крупнейшие банки покупают ОФЗ раньше рынка</b> — опережающий сигнал смены цикла</div>
+      <div class="sp-reason" id="share-reason"></div>
     </div>
     <button class="mc-btn" onclick="doShare()">Поделиться</button>
   </div>
@@ -734,138 +633,186 @@ function openShare()  { document.getElementById('shareModal').classList.add('ope
 function closeShare(e){ if(e.target===document.getElementById('shareModal')) document.getElementById('shareModal').classList.remove('open'); }
 function doShare(){
   document.getElementById('shareModal').classList.remove('open');
-  if(navigator.share) navigator.share({title:'ЦБ-Радар · Сделка #1',text:'ОФЗ 26254 · доходность +20.5% · вероятность 67%\nКрупные банки покупают раньше рынка.',url:window.location.href});
+  const ov  = state.overview || {};
+  const rec = ov.recommendation || {};
+  const r   = ov.regime || {};
+  const text = `${rec.asset || 'ОФЗ'} · +${rec.pnl_base || 0}% · вероятность ${rec.probability || 0}%\n${r.name || ''}: ${ov.action || ''}`;
+  if(navigator.share) navigator.share({title:'ЦБ-Радар', text, url:window.location.href});
   else alert('Ссылка скопирована');
 }
 </script>
-</body>
-</html>
-<!-- DATA LAYER: реальный fetch из FastAPI -->
+<!-- DATA LAYER -->
 <script>
-// Определяем базовый URL (локально или на Railway)
-const API = window.location.hostname === 'localhost'
-  ? 'http://localhost:8000'
-  : '';  // same origin на Railway
-
-// Состояние приложения
-const state = { overview: null, meetings: null, screener: null };
-
-// Утилиты
+const API = window.location.hostname === 'localhost' ? 'http://localhost:8000' : '';
+const state = { overview: null, meetings: null, screener: null, banks: null };
 const $ = id => document.getElementById(id);
-const fmt = n => new Intl.NumberFormat('ru').format(n);
+const fmt = n => new Intl.NumberFormat('ru').format(Math.round(n));
 
-// Загрузка данных при старте
+const MONTHS = ['','января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+const REGIME_COLORS = { green:'var(--green)', blue:'var(--blue)', amber:'var(--amber)', red:'var(--red)' };
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso.slice(0,10));
+  return `${d.getDate()} ${MONTHS[d.getMonth()+1]} ${d.getFullYear()}`;
+}
+
 async function loadAll() {
   try {
-    const [ov, meet, scr] = await Promise.all([
-      fetch(API + '/api/overview').then(r => r.json()),
+    const [ov, meet, scr, banks] = await Promise.all([
+      fetch(API + '/api/overview').then(r => { if(!r.ok) throw new Error('overview'); return r.json(); }),
       fetch(API + '/api/meetings').then(r => r.json()),
       fetch(API + '/api/screener').then(r => r.json()),
+      fetch(API + '/api/banks').then(r => r.json()),
     ]);
-    state.overview = ov;
-    state.meetings = meet;
-    state.screener = scr;
+    state.overview = ov; state.meetings = meet; state.screener = scr; state.banks = banks;
     renderOverview(ov);
     renderMeetings(meet);
     renderScreener(scr);
+    renderBanks(banks, ov);
+    renderPosition(ov);
+    updateSharePreview(ov);
   } catch(e) {
-    console.log('API недоступен, используем статичные данные:', e.message);
-    // Статичные данные уже в HTML — ничего не делаем
+    console.error('API error:', e);
+    $('regime-name').textContent = 'Нет данных';
+    $('regime-desc').textContent = 'Не удалось загрузить данные. Попробуйте обновить страницу.';
   }
 }
 
 function renderOverview(ov) {
   if (!ov) return;
-  const r   = ov.regime       || {};
-  const rec = ov.recommendation || {};
-  const sig = ov.signals       || {};
-  const auc = sig.auctions     || {};
-  const cur = sig.curve        || {};
-  const bnk = sig.banks        || {};
+  const r = ov.regime || {}, rec = ov.recommendation || {}, sig = ov.signals || {};
+  const cur = sig.curve || {}, auc = sig.auctions || {}, bnk = sig.banks || {};
 
-  // Режим
-  const rn = document.querySelector('.regime-name');
-  const rd = document.querySelector('.regime-desc');
-  if (rn) rn.textContent = r.name || 'Нормализация';
-  if (rd) rd.textContent = r.desc || '';
+  const week = ov.generated_at ? new Date(ov.generated_at) : new Date();
+  $('regime-kicker').textContent = `Режим рынка · КС ${ov.key_rate || '—'}% · ${week.toLocaleDateString('ru',{day:'numeric',month:'short'})}`;
+  $('regime-name').textContent = r.name || '—';
+  $('regime-desc').textContent = r.desc || ov.verdict || '';
+  $('regime-hint').textContent = ov.action || '';
+  if ($('regime-dot')) $('regime-dot').style.background = REGIME_COLORS[r.color] || 'var(--blue)';
 
-  // Вердикт
-  const vm = document.querySelector('.verdict-main'); // на случай если есть
-  if (vm) vm.textContent = ov.verdict || '';
+  $('sig-curve-label').textContent = `${cur.label || '—'} ${cur.arrow || ''}`;
+  $('sig-curve-num').textContent = cur.exp_cut != null ? `−${cur.exp_cut}% к КС` : '—';
+  $('sig-auc-label').textContent = auc.label || '—';
+  $('sig-auc-num').textContent = auc.avg_btc != null ? `BTC ${auc.avg_btc}×` : '—';
+  $('sig-bank-label').textContent = bnk.label || '—';
+  $('sig-bank-num').textContent = bnk.total_bln ? `+₽${bnk.total_bln} млрд` : '—';
 
-  // Три пилюли — обновляем числа
-  const pills = document.querySelectorAll('.sp-num');
-  if (pills.length >= 3) {
-    pills[0].textContent = `−${cur.exp_cut || 1.54}% к КС`;
-    pills[1].textContent = `BTC ${auc.avg_btc || 0.49}×`;
-    pills[2].textContent = `+₽${bnk.total_bln || 231} млрд`;
-  }
+  $('rec-title').textContent = rec.asset || '—';
+  const matY = rec.matdate ? rec.matdate.slice(0,4) : '—';
+  $('rec-sub').textContent = [
+    matY !== '—' ? `Погашение ${matY}` : null,
+    rec.coupon != null ? `Купон ${rec.coupon.toFixed(2)}%` : null,
+    rec.duration != null ? `Дюрация ${rec.duration} лет` : null,
+  ].filter(Boolean).join(' · ');
 
-  // Метрики рекомендации
-  const metrics = document.querySelectorAll('.rm-val');
-  if (metrics.length >= 3) {
-    metrics[0].textContent = `+${rec.pnl_base || 20.5}%`;
-    metrics[1].textContent = `${rec.probability || 67}%`;
-  }
+  $('rec-pnl').textContent = rec.pnl_base != null ? `+${rec.pnl_base}%` : '—';
+  $('rec-pnl-note').textContent = rec.base_scenario || 'базовый сценарий';
+  $('rec-prob').textContent = rec.probability != null ? `${rec.probability}%` : '—';
+  $('rec-prob-note').textContent = rec.probability_note || 'ближайшее заседание';
+  $('rec-flat').textContent = rec.pnl_flat != null ? `+${rec.pnl_flat}%` : '—';
 
-  // Payout строки
-  const payoutRows = document.querySelectorAll('.pr-rub');
-  const payout = rec.payout || [];
-  payoutRows.forEach((el, i) => {
-    if (payout[i]) el.textContent = `₽${fmt(payout[i].rub)}`;
+  $('why-text').innerHTML = (rec.why_text || ov.action || '—').replace(/\b(₽[\d.]+ млрд|BTC [\d.]+×|G-кривая[^.]*)/g, '<b>$1</b>');
+
+  $('payout-sub').textContent = `${rec.asset || 'ОФЗ'} · с поправкой на supply overhang`;
+  const prow = $('payout-rows');
+  prow.innerHTML = '';
+  (rec.payout || []).forEach(p => {
+    const row = document.createElement('div');
+    row.className = 'payout-row' + (p.base ? ' highlight' : '');
+    row.innerHTML = `<div class="pr-label">${p.scenario}${p.base ? ' <span class="pr-badge">Базовый</span>' : ''}</div><div class="pr-rub ${p.base?'b':'n'}">₽${fmt(p.rub)}</div><div class="pr-pct">+${p.pct}%</div>`;
+    prow.appendChild(row);
   });
-  const pctEls = document.querySelectorAll('.pr-pct');
-  pctEls.forEach((el, i) => {
-    if (payout[i]) el.textContent = `+${payout[i].pct}%`;
-  });
 
-  // Кнопка алерта
-  const alertBtns = document.querySelectorAll('.btn-primary');
+  const btn = $('btn-primary');
   if (auc.entry_signal) {
-    alertBtns.forEach(b => {
-      b.style.background = 'var(--green)';
-      b.textContent = '✓ Сигнал входа пришёл — открыть позицию';
-    });
+    btn.style.background = 'var(--green)';
+    btn.textContent = '✓ Сигнал входа — открыть позицию';
+  } else {
+    btn.style.background = '';
+    btn.textContent = ov.action || 'Уведомить когда сигнал войдёт';
   }
+  $('modal-btc').textContent = rec.entry_condition || `BTC > 1.5× · сейчас ${auc.avg_btc || '—'}×`;
 }
 
 function renderMeetings(data) {
-  if (!data || !data.meetings) return;
-  const meetings = data.meetings;
-  // Динамический рендер если нужно — пока используем статичные карточки
-  // В следующей версии: генерируем карточки из данных
+  const el = $('meetings-list');
+  if (!data?.meetings?.length) { el.innerHTML = '<div style="color:var(--text3)">Нет данных о заседаниях</div>'; return; }
+  el.innerHTML = data.meetings.slice(0,6).map((m,i) => {
+    const p = m.prob_cut || 0;
+    const cls = p >= 70 ? 'm-g' : p >= 40 ? 'm-a' : 'm-n';
+    const bg  = p >= 70 ? 'bg-g' : p >= 40 ? 'bg-a' : 'bg-n';
+    const sc  = m.scenarios || {};
+    return `<div class="meet a${Math.min(i+1,4)}"><div class="meet-top"><div><div class="meet-date">${fmtDate(m.date)}</div><div class="meet-type">${m.type || 'заседание'} · ${m.days_ahead || '—'} дн</div></div><div class="meet-pct ${cls}">${p}%</div></div><div class="meet-bar"><div class="meet-fill ${bg}" style="width:${p}%"></div></div><div class="meet-pills"><div class="pill">Без изменений <b>${sc.hold ?? '—'}%</b></div><div class="pill">−50 бп <b>${sc.cut_50 ?? '—'}%</b></div><div class="pill">−100 бп <b>${sc.cut_100 ?? '—'}%</b></div><div class="pill meet-impl">Implied ${m.implied_ks ?? '—'}%</div></div></div>`;
+  }).join('');
 }
 
 function renderScreener(data) {
-  if (!data || !data.bonds) return;
-  // Обновляем строки скринера реальными данными
-  const rows = document.querySelectorAll('.scr-row');
-  data.bonds.slice(0, rows.length).forEach((bond, i) => {
-    const row = rows[i];
-    if (!row) return;
-    const cells = row.querySelectorAll('div');
-    if (cells[0]) cells[0].querySelector('.sr-n').textContent = bond.shortname;
-    if (cells[0]) cells[0].querySelector('.sr-m').textContent =
-      `${bond.matdate?.slice(0,4)} · ${bond.coupon_pct?.toFixed(2)}%`;
-    row.querySelector('.sr-d').textContent = `${bond.duration}л`;
-    row.querySelector('.sr-y').textContent = `${bond.ytm}%`;
-    const pnl = row.querySelector('.sr-p');
-    pnl.textContent = `+${bond.pnl_13_adjusted}%`;
-  });
+  if (!data?.bonds?.length) return;
+  const sm = data.supply_metrics || {};
+  const sp = Math.round((sm.supply_pressure || 0) * 100);
+  const baseLbl = (data.rate_scenarios || []).find(s => s.id === 'cut_50')?.label?.replace('КС → ','→') || 'P&L';
+  $('scr-col-pnl').textContent = baseLbl;
+  $('scr-note').textContent = sm.overhang_active
+    ? `⚠ Supply overhang ${sp}% · pass-through ${sm.pass_through || '—'}×`
+    : `✓ Supply overhang отсутствует · BTC ${sm.btc_current || '—'}×`;
+
+  $('screener-rows').innerHTML = data.bonds.slice(0,12).map(b => {
+    const pnl = b.pnl_base_adjusted ?? b.pnl_13_adjusted ?? 0;
+    const cls = pnl >= 20 ? 'cg' : pnl >= 17 ? 'cb' : 'cn';
+    return `<div class="scr-row"><div><div class="sr-n">${b.shortname}</div><div class="sr-m">${(b.matdate||'').slice(0,4)} · ${(b.coupon_pct||0).toFixed(2)}%</div></div><div class="sr-d">${b.duration}л</div><div class="sr-y">${b.ytm}%</div><div class="sr-p ${cls}">+${pnl}%</div></div>`;
+  }).join('');
 }
 
-// Запускаем при загрузке
+function renderBanks(banks, ov) {
+  const list = banks?.buyers || [];
+  const el = $('banks-list');
+  if (!list.length) {
+    el.innerHTML = '<div style="color:var(--text3)">Нет данных Form 101 — обновится автоматически</div>';
+    return;
+  }
+  const max = Math.max(...list.map(b => b.change_bln || 0), 1);
+  el.innerHTML = list.slice(0,8).map((b,i) => `
+    <div class="bank a${Math.min(i+1,4)}"><div class="bank-top"><div><div class="bank-name">${b.name}</div></div><div class="bank-chg">+₽${b.change_bln} млрд</div></div><div class="bank-bar"><div class="bank-fill" style="width:${Math.round((b.change_bln/max)*100)}%"></div></div></div>
+  `).join('');
+  const streak = banks.streak || 0;
+  $('banks-subtitle').textContent = `Форма 101 · стрик накопления ${streak} мес · ${banks.description || ''}`;
+}
+
+function renderPosition(ov) {
+  const rec = ov?.recommendation || {}, sig = ov?.signals || {}, auc = sig.auctions || {};
+  const baseLbl = rec.base_scenario || 'базовый сценарий';
+  $('pos-title').textContent = `${baseLbl} · ${rec.asset || '—'}`;
+  $('pos-conf').textContent = `${rec.probability || 0}%`;
+  $('pos-conf-fill').style.width = `${rec.probability || 0}%`;
+  $('pos-entry').textContent = rec.entry_condition || '—';
+  $('pos-inval').textContent = rec.invalidation || '—';
+  $('pos-grid').innerHTML = [
+    ['Инструмент', `<b>${rec.asset || '—'}</b>${rec.coupon ? ` · ${rec.coupon.toFixed(2)}%` : ''}${rec.matdate ? ` · ${rec.matdate.slice(0,4)}` : ''}`],
+    ['YTM / дюрация', `${rec.ytm ?? '—'}% · ${rec.duration ?? '—'} лет`],
+    ['Целевой доход', `<b>+${rec.pnl_base ?? '—'}%</b> (${baseLbl})`],
+    ['Вероятность', `<b>${rec.probability ?? '—'}%</b> · ${rec.probability_note || ''}`],
+    ['Supply', `давление ${Math.round((rec.supply_pressure||0)*100)}% · pass-through ${rec.pass_through || '—'}`],
+    ['Риски', auc.avg_btc != null ? `BTC ${auc.avg_btc}× на аукционах` : '—'],
+  ].map(([k,v]) => `<div class="pg-row"><div class="pg-key">${k}</div><div class="pg-val">${v}</div></div>`).join('');
+}
+
+function updateSharePreview(ov) {
+  const rec = ov?.recommendation || {}, r = ov?.regime || {};
+  $('share-label').textContent = `Сделка · ${new Date().toLocaleDateString('ru')}`;
+  $('share-asset').textContent = rec.asset || '—';
+  $('share-pnl').textContent = rec.pnl_base != null ? `+${rec.pnl_base}%` : '—';
+  $('share-prob').textContent = rec.probability != null ? `${rec.probability}%` : '—';
+  $('share-regime').textContent = r.name || '—';
+  $('share-reason').innerHTML = rec.why_text ? `Причина: <b>${rec.why_text}</b>` : '';
+}
+
 window.addEventListener('DOMContentLoaded', loadAll);
 
-// Telegram WebApp API интеграция
 if (window.Telegram?.WebApp) {
   const tg = window.Telegram.WebApp;
-  tg.ready();
-  tg.expand();
-  // Тема Telegram
-  if (tg.colorScheme === 'light') {
-    document.documentElement.style.setProperty('--bg', '#F2F2F7');
-    // (опционально: light theme поддержка)
-  }
+  tg.ready(); tg.expand();
 }
 </script>
+</body>
+</html>

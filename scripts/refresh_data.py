@@ -160,10 +160,14 @@ def refresh_screener():
         spec.loader.exec_module(mod)
 
         supply  = mod.calc_supply_metrics()
-        results = mod.run_screener(supply)
+        from parsers.gcurve import get_key_rate
+        key_rate = get_key_rate() or 14.5
+        results, rate_scenarios = mod.run_screener(supply, key_rate)
 
         out = {
             "generated_at":   datetime.now().isoformat(),
+            "key_rate":       key_rate,
+            "rate_scenarios": rate_scenarios,
             "supply_metrics": {k: (bool(v) if isinstance(v, bool) else float(v) if isinstance(v, (int,float)) else v) for k,v in supply.items()},
             "bonds": [
                 {
@@ -174,10 +178,13 @@ def refresh_screener():
                     "price_pct":          float(r["price_pct"]),
                     "coupon_pct":         float(r["coupon_pct"]),
                     "ytm":                float(r["ytm"]),
-                    "pnl_13_theoretical": float(r["scenarios"]["КС → 13.0%"]["theoretical_pct"]),
-                    "pnl_13_adjusted":    float(r["scenarios"]["КС → 13.0%"]["adjusted_pct"]),
-                    "pnl_11_adjusted":    float(r["scenarios"]["КС → 11.0%"]["adjusted_pct"]),
-                    "pnl_flat":           float(r["scenarios"]["Flat (hold)"]["adjusted_pct"]),
+                    "base_scenario":      r["base_scenario"],
+                    "pnl_base_adjusted":  float(r["pnl_base_adjusted"]),
+                    "pnl_mid_adjusted":   float(r["pnl_mid_adjusted"]),
+                    "pnl_deep_adjusted":  float(r["pnl_deep_adjusted"]),
+                    "pnl_flat":           float(r["pnl_flat"]),
+                    "pnl_13_adjusted":    float(r["pnl_13_adjusted"]),
+                    "pnl_11_adjusted":    float(r["pnl_11_adjusted"]),
                 }
                 for r in results
             ],

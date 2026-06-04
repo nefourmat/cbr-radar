@@ -465,67 +465,163 @@ def compute_regime(curve: dict, auctions: dict, banks: dict) -> dict:
                 "desc": "Рынок ждёт снижения КС — сигнал ещё не пришёл"}
 
 
-def compute_recommendation(key_rate: float, auctions: dict, banks: dict) -> dict:
+def _load_meeting_probability() -> tuple[int, str]:
+    """Вероятность снижения на ближайшем заседании из кэша."""
+    path = DATA_DIR / "cbr_probabilities.json"
+    if not path.exists():
+        return 50, "—"
+    try:
+        with open(path, encoding="utf-8") as f:
+            meetings = json.load(f).get("meetings", [])
+        if not meetings:
+            return 50, "—"
+        m = meetings[0]
+        dt = m.get("date", "")[:10]
+        return int(m.get("prob_cut", 50)), dt
+    except Exception:
+        return 50, "—"
+
+
+def _load_invalidation() -> str:
+    path = DATA_DIR / "hypotheses.json"
+    if path.exists():
+        try:
+            with open(path, encoding="utf-8") as f:
+                for h in json.load(f).get("hypotheses", []):
+                    if h.get("status") == "open" and h.get("invalidation"):
+                        inv = h["invalidation"]
+                        if h.get("invalidation_date"):
+                            inv += f" → {h['invalidation_date']}"
+                        return inv
+        except Exception:
+            pass
+    return "ИПЦ существенно выше прогноза ЦБ"
+
+
+def _best_bond(bonds: list) -> dict:
+    return max(
+        bonds,
+        key=lambda b: b.get(
+            "pnl_base_adjusted",
+            b.get("pnl_13_adjusted", 0),
+        ),
+    )
+
+
+def _build_payout(best: dict, rate_scenarios: list | None) -> list:
+    """Сценарии выплат из bond + rate_scenarios."""
+    flat_pct = best.get("pnl_flat", 0)
+    rows = [{
+        "scenario": "КС без изменений",
+        "rub": round(100000 * (1 + flat_pct / 100)),
+        "pct": flat_pct,
+        "base": False,
+    }]
+    cuts = [s for s in (rate_scenarios or []) if s.get("id") != "flat"]
+    pnl_map = {
+        "cut_50":  best.get("pnl_base_adjusted", best.get("pnl_13_adjusted", 0)),
+        "cut_100": best.get("pnl_mid_adjusted", 0),
+        "cut_150": best.get("pnl_deep_adjusted", best.get("pnl_11_adjusted", 0)),
+    }
+    for i, sc in enumerate(cuts):
+        pct = pnl_map.get(sc["id"], 0)
+        rows.append({
+            "scenario": sc["label"],
+            "rub": round(100000 * (1 + pct / 100)),
+            "pct": pct,
+            "base": i == 0,
+        })
+    if len(rows) == 1:
+        base = best.get("pnl_base_adjusted", best.get("pnl_13_adjusted", 0))
+        rows.append({
+            "scenario": best.get("base_scenario", "Базовый сценарий"),
+            "rub": round(100000 * (1 + base / 100)),
+            "pct": base,
+            "base": True,
+        })
+    return rows
+
+
+def _build_why_text(curve: dict, auctions: dict, banks: dict, entry: bool) -> str:
+    parts = []
+    if curve.get("status") == "bull":
+        parts.append(
+            f"G-кривая: рынок ждёт снижения КС до ~{curve.get('min_yield', '—')}%"
+        )
+    if banks.get("total_bln", 0) > 0:
+        parts.append(
+            f"банки нарастили позиции на ₽{banks['total_bln']:.0f} млрд"
+        )
+    btc = auctions.get("avg_btc", 0)
+    if entry:
+        parts.append(f"аукционы подтверждают спрос (BTC {btc:.2f}×)")
+    else:
+        parts.append(
+            f"на аукционах спрос слабый (BTC {btc:.2f}×) — ждём BTC > 1.5×"
+        )
+    return ". ".join(parts).capitalize() + "."
+
+
+def compute_recommendation(
+    key_rate: float,
+    auctions: dict,
+    banks: dict,
+    curve: dict | None = None,
+) -> dict:
     scr_path = DATA_DIR / "bond_screener.json"
     pass_t   = auctions.get("pass_through", 0.66)
     sp       = auctions.get("supply_pressure", 0.67)
     entry    = auctions.get("entry_signal", False)
+    prob, meet_dt = _load_meeting_probability()
+    invalidation = _load_invalidation()
 
     if scr_path.exists():
         with open(scr_path, encoding="utf-8") as f:
             scr = json.load(f)
         bonds = scr.get("bonds", [])
+        rate_scenarios = scr.get("rate_scenarios")
         if bonds:
-            best = bonds[0]
-            pnl  = best.get("pnl_13_adjusted", 0)
+            best = _best_bond(bonds)
+            pnl  = best.get("pnl_base_adjusted", best.get("pnl_13_adjusted", 0))
+            base_label = best.get("base_scenario", f"КС → {key_rate - 0.5:.1f}%")
             return {
-                "asset":         best["shortname"],
-                "secid":         best["secid"],
-                "matdate":       best["matdate"],
-                "coupon":        best.get("coupon_pct"),
-                "ytm":           best.get("ytm"),
-                "duration":      best.get("duration"),
-                "pnl_base":      pnl,
-                "pnl_flat":      best.get("pnl_flat", 0),
-                "probability":   67,
-                "win_rate":      75,
-                "win_rate_n":    3,
-                "win_rate_d":    4,
-                "pass_through":  pass_t,
+                "asset":           best["shortname"],
+                "secid":           best["secid"],
+                "matdate":         best["matdate"],
+                "coupon":          best.get("coupon_pct"),
+                "ytm":             best.get("ytm"),
+                "duration":        best.get("duration"),
+                "pnl_base":        pnl,
+                "pnl_flat":        best.get("pnl_flat", 0),
+                "probability":     prob,
+                "probability_note": f"рынок на заседание {meet_dt}",
+                "win_rate":        prob,
+                "win_rate_n":      prob,
+                "win_rate_d":      100,
+                "pass_through":    pass_t,
                 "supply_pressure": sp,
-                "entry_signal":  entry,
+                "entry_signal":    entry,
                 "entry_condition": f"BTC > 1.5× · сейчас {auctions.get('avg_btc', 0):.2f}×",
-                "invalidation":  "ИПЦ за май > 10.5% г/г",
-                "payout": [
-                    {"scenario": "КС без изменений",
-                     "rub": round(100000 * (1 + best["pnl_flat"]/100)),
-                     "pct": best["pnl_flat"], "base": False},
-                    {"scenario": "КС → 13.0%", "base": True,
-                     "rub": round(100000 * (1 + pnl/100)), "pct": pnl},
-                    {"scenario": "КС → 12.0%",
-                     "rub": round(100000 * (1 + best.get("pnl_cut250", pnl+5)/100)),
-                     "pct": round(best.get("pnl_cut250", pnl+5), 1), "base": False},
-                    {"scenario": "КС → 11.0%",
-                     "rub": round(100000 * (1 + best["pnl_11_adjusted"]/100)),
-                     "pct": best["pnl_11_adjusted"], "base": False},
-                ],
+                "invalidation":    invalidation,
+                "base_scenario":   base_label,
+                "why_text":        _build_why_text(curve or {}, auctions, banks, entry),
+                "payout":          _build_payout(best, rate_scenarios),
             }
 
-    # Fallback
+    base_target = round((key_rate - 0.5) * 2) / 2
     return {
-        "asset": "ОФЗ 26254", "secid": None, "matdate": "2040-10-03",
-        "coupon": 13.0, "ytm": 14.85, "duration": 6.4,
-        "pnl_base": 20.5, "pnl_flat": 14.1,
-        "probability": 67, "win_rate": 75, "win_rate_n": 3, "win_rate_d": 4,
+        "asset": "—", "secid": None, "matdate": None,
+        "coupon": None, "ytm": None, "duration": None,
+        "pnl_base": 0, "pnl_flat": 0,
+        "probability": prob,
+        "probability_note": f"рынок на заседание {meet_dt}",
+        "win_rate": prob, "win_rate_n": prob, "win_rate_d": 100,
         "pass_through": pass_t, "supply_pressure": sp, "entry_signal": entry,
         "entry_condition": "BTC > 1.5× на аукционе",
-        "invalidation": "ИПЦ > 10.5% г/г",
-        "payout": [
-            {"scenario": "КС без изменений", "rub": 114100, "pct": 14.1, "base": False},
-            {"scenario": "КС → 13.0%",       "rub": 120500, "pct": 20.5, "base": True},
-            {"scenario": "КС → 12.0%",       "rub": 129200, "pct": 29.2, "base": False},
-            {"scenario": "КС → 11.0%",       "rub": 138000, "pct": 38.0, "base": False},
-        ],
+        "invalidation": invalidation,
+        "base_scenario": f"КС → {base_target:.1f}%",
+        "why_text": "Данные скринера загружаются — запустите refresh_data.py",
+        "payout": [],
     }
 
 
@@ -556,7 +652,7 @@ async def get_overview():
     auctions = compute_auction_signal()
     banks    = compute_banks_signal()
     regime   = compute_regime(curve, auctions, banks)
-    rec      = compute_recommendation(key_rate, auctions, banks)
+    rec      = compute_recommendation(key_rate, auctions, banks, curve)
 
     entry = auctions.get("entry_signal", False)
     if entry:

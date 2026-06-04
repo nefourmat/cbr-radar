@@ -38,8 +38,18 @@ CBR_MEETINGS_2026 = [
     {"date": date(2026, 7, 24), "type": "опорное",  "done": False, "decision_bps": None},
     {"date": date(2026, 9, 11), "type": "обычное",  "done": False, "decision_bps": None},
     {"date": date(2026, 10, 23),"type": "опорное",  "done": False, "decision_bps": None},
-    {"date": date(2026, 12, 18),"type": "обычное",  "done": False, "decision_bps": None},
+CBR_MEETINGS_2027 = [
+    {"date": date(2027, 2, 12), "type": "опорное",  "done": False, "decision_bps": None},
+    {"date": date(2027, 3, 19), "type": "обычное",  "done": False, "decision_bps": None},
+    {"date": date(2027, 4, 23), "type": "опорное",  "done": False, "decision_bps": None},
+    {"date": date(2027, 6, 11), "type": "обычное",  "done": False, "decision_bps": None},
+    {"date": date(2027, 7, 23), "type": "опорное",  "done": False, "decision_bps": None},
+    {"date": date(2027, 9, 10), "type": "обычное",  "done": False, "decision_bps": None},
+    {"date": date(2027, 10, 22),"type": "опорное",  "done": False, "decision_bps": None},
+    {"date": date(2027, 12, 17),"type": "обычное",  "done": False, "decision_bps": None},
 ]
+
+CBR_MEETINGS = CBR_MEETINGS_2026 + CBR_MEETINGS_2027
 
 MONTHS_RU = {1:"января",2:"февраля",3:"марта",4:"апреля",
              5:"мая",6:"июня",7:"июля",8:"августа",
@@ -169,7 +179,7 @@ def calc_meeting_probabilities(gcurve_df, key_rate, curve_date):
     prev_t     = 0.0
     prev_spot  = key_rate
 
-    for meeting in CBR_MEETINGS_2026:
+    for meeting in CBR_MEETINGS:
         mt = meeting["date"]
         if meeting.get("done"):
             continue

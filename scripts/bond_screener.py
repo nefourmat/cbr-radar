@@ -22,17 +22,12 @@ import pandas as pd
 from datetime import date, datetime
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from core.rate_scenarios import build_rate_scenarios
+
 DATA_DIR   = Path("data")
 FACE_VALUE = 1000
 BTC_NORMAL = 1.5   # исторически нормальный bid-to-cover
-
-SCENARIOS = [
-    {"label": "КС → 13.0%", "cut_bps": -150},
-    {"label": "КС → 12.0%", "cut_bps": -250},
-    {"label": "КС → 11.0%", "cut_bps": -350},
-    {"label": "Flat (hold)", "cut_bps":    0},
-]
-
 
 # ─────────────────────────────────────────────
 # SUPPLY PRESSURE
@@ -179,7 +174,8 @@ def calc_pnl(price_pct, coupon_pct, duration, cut_bps,
 # СКРИНЕР
 # ─────────────────────────────────────────────
 
-def run_screener(supply):
+def run_screener(supply, key_rate: float = 14.5):
+    scenarios = build_rate_scenarios(key_rate)
     df = fetch_ofz_universe()
     print(f"  Найдено {len(df)} ОФЗ (фикс. купон, срок > 3 лет)\n")
 
@@ -197,13 +193,21 @@ def run_screener(supply):
 
         dur = calc_duration(coupon_pct, ytm, years_left)
 
-        scenarios = {}
-        for sc in SCENARIOS:
-            scenarios[sc["label"]] = calc_pnl(
-                price_pct, coupon_pct, dur,
-                sc["cut_bps"],
-                pass_through=supply["pass_through"],
-            )
+        scenario_out = {}
+        for sc in scenarios:
+            scenario_out[sc["id"]] = {
+                **sc,
+                **calc_pnl(
+                    price_pct, coupon_pct, dur,
+                    sc["cut_bps"],
+                    pass_through=supply["pass_through"],
+                ),
+            }
+
+        cuts = [s for s in scenarios if s["id"] != "flat"]
+        base_id = cuts[0]["id"] if cuts else "flat"
+        mid_id  = cuts[1]["id"] if len(cuts) > 1 else base_id
+        deep_id = cuts[2]["id"] if len(cuts) > 2 else mid_id
 
         results.append({
             "secid":       row["SECID"],
@@ -214,21 +218,38 @@ def run_screener(supply):
             "coupon_pct":  round(coupon_pct, 2),
             "ytm":         ytm,
             "duration":    dur,
-            "scenarios":   scenarios,
+            "scenarios":   scenario_out,
+            "base_scenario": scenarios[0]["label"] if cuts else "Flat",
+            "pnl_base_adjusted":  scenario_out[base_id]["adjusted_pct"],
+            "pnl_mid_adjusted":   scenario_out[mid_id]["adjusted_pct"],
+            "pnl_deep_adjusted":  scenario_out[deep_id]["adjusted_pct"],
+            "pnl_flat":           scenario_out["flat"]["adjusted_pct"],
+            # legacy aliases
+            "pnl_13_adjusted":    scenario_out[base_id]["adjusted_pct"],
+            "pnl_11_adjusted":    scenario_out[deep_id]["adjusted_pct"],
         })
 
-    results.sort(key=lambda x: x["duration"], reverse=True)
-    return results
+    results.sort(
+        key=lambda x: x["pnl_base_adjusted"],
+        reverse=True,
+    )
+    return results, scenarios
 
 
 # ─────────────────────────────────────────────
 # ВЫВОД
 # ─────────────────────────────────────────────
 
-def format_output(results, supply):
+def format_output(results, supply, rate_scenarios=None):
     W = 80
     L = []
     pt = supply["pass_through"]
+    base_id  = "cut_50"
+    deep_id  = "cut_150"
+    base_lbl = next((s["label"] for s in (rate_scenarios or [])
+                     if s["id"] == base_id), "базовый сценарий")
+    deep_lbl = next((s["label"] for s in (rate_scenarios or [])
+                     if s["id"] == deep_id), "глубокий сценарий")
 
     L += [
         "",
@@ -264,77 +285,72 @@ def format_output(results, supply):
             f"  ✓ Overhang отсутствует: теория = практика",
         ]
 
-    # Таблица
     L += [
         "",
         f"  {'Серия':<10} {'Погаш':>6} {'Дюр':>5} {'YTM':>6}  "
-        f"{'→13% (теор/реал)':>18}  "
-        f"{'→11% (теор/реал)':>18}  "
+        f"{base_lbl[:18]:>18}  "
+        f"{deep_lbl[:18]:>18}  "
         f"{'Flat':>7}",
         f"  {'─'*78}",
     ]
 
     for r in results:
         mat_yr = r["matdate"].strftime("%Y")
-        sc13   = r["scenarios"]["КС → 13.0%"]
-        sc11   = r["scenarios"]["КС → 11.0%"]
-        scF    = r["scenarios"]["Flat (hold)"]
+        sc_base = r["scenarios"].get(base_id, r["scenarios"]["flat"])
+        sc_deep = r["scenarios"].get(deep_id, sc_base)
+        scF     = r["scenarios"]["flat"]
 
         L.append(
             f"  {r['shortname']:<10} {mat_yr:>6} "
             f"{r['duration']:>4.1f}л {r['ytm']:>5.2f}%  "
-            f"  {sc13['theoretical_pct']:>+6.1f}%/{sc13['adjusted_pct']:>+6.1f}%  "
-            f"  {sc11['theoretical_pct']:>+6.1f}%/{sc11['adjusted_pct']:>+6.1f}%  "
+            f"  {sc_base['adjusted_pct']:>+6.1f}%  "
+            f"  {sc_deep['adjusted_pct']:>+6.1f}%  "
             f"  {scF['adjusted_pct']:>+6.1f}%"
         )
 
     L += [f"  {'─'*78}",
-          "  Теор = без поправки  ·  Реал = с поправкой на supply overhang"]
+          "  P&L с поправкой на supply overhang · сортировка по базовому сценарию"]
 
-    # Топ-3 по скорректированному P&L при КС→13%
-    top3 = sorted(results,
-                  key=lambda x: x["scenarios"]["КС → 13.0%"]["adjusted_pct"],
-                  reverse=True)[:3]
+    top3 = results[:3]
 
     L += [
         "",
-        f"  ТОП-3 РЕАЛЬНЫЙ P&L (КС → 13%, BTC = {btc_cur:.2f}×)",
+        f"  ТОП-3 P&L ({base_lbl}, BTC = {btc_cur:.2f}×)",
         f"  {'─'*78}",
     ]
 
     for i, r in enumerate(top3, 1):
-        sc13 = r["scenarios"]["КС → 13.0%"]
-        scF  = r["scenarios"]["Flat (hold)"]
-        loss = abs(round(sc13["theoretical_pct"] - sc13["adjusted_pct"], 1))
+        sc_base = r["scenarios"].get(base_id, r["scenarios"]["flat"])
+        scF     = r["scenarios"]["flat"]
+        loss = abs(round(sc_base["theoretical_pct"] - sc_base["adjusted_pct"], 1))
         L += [
             "",
             f"  {i}. {r['shortname']}  ·  погаш {r['matdate']}  "
             f"·  дюрация {r['duration']}л  ·  купон {r['coupon_pct']:.2f}%",
             f"     Цена: {r['price_pct']:.1f}%  ·  YTM: {r['ytm']:.2f}%",
-            f"     Теоретически:      {sc13['theoretical_pct']:>+.1f}%",
-            f"     Реально (overhang): {sc13['adjusted_pct']:>+.1f}%  "
+            f"     Теоретически:      {sc_base['theoretical_pct']:>+.1f}%",
+            f"     Реально (overhang): {sc_base['adjusted_pct']:>+.1f}%  "
             f"(−{loss}% потери от слабого спроса)",
             f"     Без снижения КС:   {scF['adjusted_pct']:>+.1f}% (только купоны)",
         ]
 
-    # Когда overhang исчезнет
-    full_pt_top = sorted(results,
-                         key=lambda x: x["scenarios"]["КС → 13.0%"]["theoretical_pct"],
-                         reverse=True)[0]
-    sc_full = full_pt_top["scenarios"]["КС → 13.0%"]
+    full_pt_top = results[0] if results else None
+    if full_pt_top:
+        sc_base = full_pt_top["scenarios"].get(base_id, full_pt_top["scenarios"]["flat"])
+        sc_full = {**sc_base, "adjusted_pct": sc_base["theoretical_pct"]}
 
-    L += [
-        "",
-        f"  КАК ИЗМЕНИТСЯ P&L КОГДА BTC > {BTC_NORMAL}× (overhang исчезнет)",
-        f"  {'─'*78}",
-        f"  Pass-through вернётся к 1.0 — теория = практика",
-        f"  Лучшая бумага ({full_pt_top['shortname']}): "
-        f"{sc13['adjusted_pct']:+.1f}% → {sc_full['theoretical_pct']:+.1f}%",
-        f"  Именно поэтому BTC > {BTC_NORMAL}× — наш главный сигнал входа.",
-        "",
-        "═" * W,
-        "",
-    ]
+        L += [
+            "",
+            f"  КАК ИЗМЕНИТСЯ P&L КОГДА BTC > {BTC_NORMAL}× (overhang исчезнет)",
+            f"  {'─'*78}",
+            f"  Pass-through вернётся к 1.0 — теория = практика",
+            f"  Лучшая бумага ({full_pt_top['shortname']}): "
+            f"{sc_base['adjusted_pct']:+.1f}% → {sc_full['theoretical_pct']:+.1f}%",
+            f"  Именно поэтому BTC > {BTC_NORMAL}× — наш главный сигнал входа.",
+            "",
+            "═" * W,
+            "",
+        ]
 
     return "\n".join(L)
 
@@ -344,20 +360,23 @@ def format_output(results, supply):
 # ─────────────────────────────────────────────
 
 if __name__ == "__main__":
+    from parsers.gcurve import get_key_rate
+
     print("Загружаем данные с MOEX ISS...")
     supply = calc_supply_metrics()
-    print(f"  BTC текущий: {supply['btc_current']:.2f}×  "
+    key_rate = get_key_rate() or 14.5
+    print(f"  КС = {key_rate}%  ·  BTC = {supply['btc_current']:.2f}×  "
           f"Supply pressure: {round(supply['supply_pressure']*100)}%  "
           f"Pass-through: {supply['pass_through']:.2f}\n")
 
-    results = run_screener(supply)
-    output  = format_output(results, supply)
+    results, rate_scenarios = run_screener(supply, key_rate)
+    output  = format_output(results, supply, rate_scenarios)
     print(output)
 
-    # Сохраняем
-    # Сохраняем
     out = {
         "generated_at":  datetime.now().isoformat(),
+        "key_rate":      key_rate,
+        "rate_scenarios": rate_scenarios,
         "supply_metrics": {
             "btc_current":     float(supply["btc_current"]),
             "btc_normal":      float(supply["btc_normal"]),
@@ -368,17 +387,20 @@ if __name__ == "__main__":
         },
         "bonds": [
             {
-                "secid":                r["secid"],
-                "shortname":            r["shortname"],
-                "matdate":              r["matdate"].isoformat(),
-                "duration":             float(r["duration"]),
-                "price_pct":            float(r["price_pct"]),
-                "coupon_pct":           float(r["coupon_pct"]),
-                "ytm":                  float(r["ytm"]),
-                "pnl_13_theoretical":   float(r["scenarios"]["КС → 13.0%"]["theoretical_pct"]),
-                "pnl_13_adjusted":      float(r["scenarios"]["КС → 13.0%"]["adjusted_pct"]),
-                "pnl_11_adjusted":      float(r["scenarios"]["КС → 11.0%"]["adjusted_pct"]),
-                "pnl_flat":             float(r["scenarios"]["Flat (hold)"]["adjusted_pct"]),
+                "secid":              r["secid"],
+                "shortname":          r["shortname"],
+                "matdate":            r["matdate"].isoformat(),
+                "duration":           float(r["duration"]),
+                "price_pct":          float(r["price_pct"]),
+                "coupon_pct":         float(r["coupon_pct"]),
+                "ytm":                float(r["ytm"]),
+                "base_scenario":      r["base_scenario"],
+                "pnl_base_adjusted":  float(r["pnl_base_adjusted"]),
+                "pnl_mid_adjusted":   float(r["pnl_mid_adjusted"]),
+                "pnl_deep_adjusted": float(r["pnl_deep_adjusted"]),
+                "pnl_flat":           float(r["pnl_flat"]),
+                "pnl_13_adjusted":    float(r["pnl_13_adjusted"]),
+                "pnl_11_adjusted":    float(r["pnl_11_adjusted"]),
             }
             for r in results
         ],
