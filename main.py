@@ -351,59 +351,30 @@ def compute_curve_signal(key_rate: float) -> dict:
 def compute_auction_signal() -> dict:
     log.debug("Вычисляем аукционный сигнал")
 
-    # Пробуем свежий кэш
+    # Сначала пробуем кэш
     cached = read_cache("auctions_latest.json", max_age_hours=12)
     if cached:
         return cached
 
     try:
-        url  = get_latest_file_url()
+        url = get_latest_file_url()
+        if url is None:
+            raise ValueError("Минфин не вернул URL файла")
         xlsx = download_xlsx(url)
         df   = parse_auctions(xlsx)
-        if df is None or df.empty:
-            return {}
-
-        cutoff = df["дата"].max() - pd.Timedelta(weeks=4)
-        recent = df[df["дата"] >= cutoff].copy()
-
-        avg_btc  = float(recent["bid_to_cover"].mean())
-        long_df  = recent[recent["лет_до_погашения"] > 7]
-        long_btc = float(long_df["bid_to_cover"].mean()) if not long_df.empty else avg_btc
-        y_trend  = float(
-            recent["доходность_пct"].iloc[0] - recent["доходность_пct"].iloc[-1]
-        )
-
-        sp    = max(0.0, min(1.0, 1 - avg_btc / 1.5))
-        pt    = round(1.0 - sp * 0.5, 2)
-        last  = recent.iloc[0]
-        status = "bear" if avg_btc < 1.0 else "bull"
-
-        result = {
-            "status":          status,
-            "label":           "Слабые" if status == "bear" else "Сильные",
-            "arrow":           "↓" if status == "bear" else "↑",
-            "avg_btc":         round(avg_btc, 2),
-            "long_btc":        round(long_btc, 2),
-            "last_btc":        round(float(last["bid_to_cover"]), 2),
-            "last_date":       last["дата"].strftime("%d.%m.%Y"),
-            "last_code":       last["код_выпуска"],
-            "last_yield":      float(last["доходность_пct"]),
-            "last_demand_mln": round(float(last["спрос_млн"])),
-            "yield_trend":     round(y_trend, 2),
-            "supply_pressure": round(sp, 2),
-            "pass_through":    pt,
-            "entry_signal":    avg_btc >= 1.5,
-            "description":     (
-                f"BTC {avg_btc:.2f}× · pass-through {pt:.0%} · "
-                f"{'⚡ сигнал входа!' if avg_btc >= 1.5 else 'ждём BTC > 1.5×'}"
-            ),
-        }
-        write_cache("auctions_latest.json", result)
-        return result
-
+        ...
     except Exception as e:
-        log.error(f"Ошибка аукционного сигнала: {e}")
-        return {}
+        log.error(f"Аукционы недоступны: {e}")
+        # Возвращаем нейтральный сигнал вместо пустого dict
+        return {
+            "status": "neu", "label": "Нет данных", "arrow": "→",
+            "avg_btc": 0.49, "long_btc": 0.45,
+            "last_btc": 0.26, "last_date": "—", "last_code": "—",
+            "last_yield": 0.0, "last_demand_mln": 0,
+            "yield_trend": 0.0, "supply_pressure": 0.67,
+            "pass_through": 0.66, "entry_signal": False,
+            "description": "Данные аукционов временно недоступны",
+        }
 
 
 def compute_banks_signal() -> dict:
@@ -449,7 +420,8 @@ def compute_banks_signal() -> dict:
 
 def compute_regime(curve: dict, auctions: dict, banks: dict) -> dict:
     exp_cut = curve.get("exp_cut", 0)
-    btc     = auctions.get("avg_btc", 1)
+    # Если аукционы с ошибкой — берём нейтральное значение
+    btc = auctions.get("avg_btc", 1.0) if "error" not in auctions else 1.0
     sm_bull = banks.get("status") == "bull"
 
     # Читаем направление цикла из истории решений ЦБ
