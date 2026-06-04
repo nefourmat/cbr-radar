@@ -12,6 +12,8 @@ main.py — FastAPI бэкенд ЦБ-Радар
 """
 
 import json
+from fastapi.responses import JSONResponse
+import json
 import logging
 import sys
 import subprocess
@@ -200,6 +202,14 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
 )
+
+
+
+class UTF8JSONResponse(JSONResponse):
+    def render(self, content) -> bytes:
+        return json.dumps(
+            content, ensure_ascii=False, indent=2, default=str
+        ).encode("utf-8")
 
 app.add_middleware(
     CORSMiddleware,
@@ -437,22 +447,41 @@ def compute_banks_signal() -> dict:
     }
 
 
-def compute_regime(curve: dict, auctions: dict) -> dict:
+def compute_regime(curve: dict, auctions: dict, banks: dict) -> dict:
     exp_cut = curve.get("exp_cut", 0)
     btc     = auctions.get("avg_btc", 1)
+    sm_bull = banks.get("status") == "bull"
 
-    if exp_cut > 1.5 and btc >= 1.2:
-        return {"name": "Смягчение",    "color": "green",
-                "emoji": "🟢", "desc": "Рынок готовится к снижению КС и активно покупает"}
-    elif exp_cut > 0.5 and btc < 1.0:
-        return {"name": "Нормализация", "color": "blue",
-                "emoji": "🔵", "desc": "Рынок ждёт снижения КС — сигнал ещё не пришёл"}
-    elif exp_cut < 0 and btc > 1.5:
-        return {"name": "Перегрев",     "color": "amber",
-                "emoji": "🟡", "desc": "Рынок переоценён — повышенный риск коррекции"}
+    # Читаем направление цикла из истории решений ЦБ
+    cycle = 0
+    try:
+        dec = pd.read_csv(DATA_DIR / "cbr_decisions.csv")
+        dec["decision_date"] = pd.to_datetime(dec["decision_date"])
+        last3 = (dec[dec["rate_change_bps"] != 0]
+                 .sort_values("decision_date")
+                 .tail(3)["rate_change_bps"])
+        if (last3 < 0).all():
+            cycle = +1   # устойчивый цикл снижения
+        elif (last3 > 0).all():
+            cycle = -1   # устойчивый цикл повышения
+    except Exception:
+        pass
+
+    if cycle == +1 and exp_cut > 0.5 and sm_bull:
+        return {"name": "Смягчение", "color": "green", "emoji": "🟢",
+                "desc": "ЦБ снижает ставку · рынок и банки подтверждают тренд"}
+    elif cycle == +1 and exp_cut > 0.5:
+        return {"name": "Нормализация", "color": "blue", "emoji": "🔵",
+                "desc": "Цикл снижения идёт · рынок ждёт следующего шага ЦБ"}
+    elif cycle == -1 or exp_cut < -0.5:
+        return {"name": "Перегрев", "color": "amber", "emoji": "🟡",
+                "desc": "Ставка растёт · длинные ОФЗ под давлением"}
+    elif btc < 0.3 and exp_cut < 0:
+        return {"name": "Паника", "color": "red", "emoji": "🔴",
+                "desc": "Рынок в стрессе · аукционы проваливаются"}
     else:
-        return {"name": "Паника",       "color": "red",
-                "emoji": "🔴", "desc": "Высокая неопределённость — защитная позиция"}
+        return {"name": "Нормализация", "color": "blue", "emoji": "🔵",
+                "desc": "Рынок ждёт снижения КС — сигнал ещё не пришёл"}
 
 
 def compute_recommendation(key_rate: float, auctions: dict, banks: dict) -> dict:
@@ -538,7 +567,7 @@ async def get_overview():
     cached = read_cache("api_overview.json", max_age_hours=1)
     if cached:
         log.debug("Возвращаем кэш /api/overview")
-        return JSONResponse(cached)
+        return UTF8JSONResponse(cached)
 
     log.info("Вычисляем /api/overview...")
     key_rate = get_key_rate() or 14.5
@@ -573,16 +602,16 @@ async def get_overview():
     write_cache("api_overview.json", result)
     log.info(f"Overview: КС={key_rate}%, режим={regime['name']}, "
              f"BTC={auctions.get('avg_btc','?')}×")
-    return JSONResponse(result)
+    return UTF8JSONResponse(result, media_type="application/json; charset=utf-8")
 
 
 @app.get("/api/meetings", response_model=MeetingsResponse)
 async def get_meetings():
     cached = read_cache("cbr_probabilities.json", max_age_hours=6)
     if cached:
-        return JSONResponse(cached)
+        return UTF8JSONResponse(cached)
     log.warning("/api/meetings: кэш не найден — запусти scripts/refresh_data.py")
-    return JSONResponse({"generated_at": datetime.now().isoformat(),
+    return UTF8JSONResponse({"generated_at": datetime.now().isoformat(),
                          "key_rate": 14.5, "curve_date": "—", "meetings": []})
 
 
@@ -590,9 +619,9 @@ async def get_meetings():
 async def get_screener():
     cached = read_cache("bond_screener.json", max_age_hours=6)
     if cached:
-        return JSONResponse(cached)
+        return UTF8JSONResponse(cached)
     log.warning("/api/screener: кэш не найден — запусти scripts/refresh_data.py")
-    return JSONResponse({"generated_at": datetime.now().isoformat(),
+    return UTF8JSONResponse({"generated_at": datetime.now().isoformat(),
                          "supply_metrics": {}, "bonds": []})
 
 
@@ -600,10 +629,10 @@ async def get_screener():
 async def get_banks():
     cached = read_cache("api_banks.json", max_age_hours=24)
     if cached:
-        return JSONResponse(cached)
+        return UTF8JSONResponse(cached)
     banks = compute_banks_signal()
     write_cache("api_banks.json", banks)
-    return JSONResponse(banks)
+    return UTF8JSONResponse(banks)
 
 
 @app.get("/api/digest")
@@ -613,3 +642,11 @@ async def get_digest():
         return {"text": path.read_text(encoding="utf-8")}
     log.warning("/api/digest: файл не найден")
     return {"text": "Дайджест не найден. Запусти python digest.py"}
+
+
+@app.post("/api/cache/clear")
+async def clear_cache():
+    for f in DATA_DIR.glob("api_*.json"):
+        f.unlink()
+    log.info("Кэш очищен")
+    return {"cleared": True}
