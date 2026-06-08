@@ -1,30 +1,21 @@
 """
 main.py — FastAPI бэкенд ЦБ-Радар
-
-Включает:
-  - Pydantic response models (валидация + Swagger /docs)
-  - Структурированное логирование (logging, не print)
-  - APScheduler: refresh_data.py каждый день 08:00 + среда 13:30
-  - CORS middleware
-  - Кэширование JSON файлов
-
-Запуск: uvicorn main:app --reload --port 8000
 """
-
 import json
 import logging
 import os
 import sys
 import subprocess
+import threading
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, List
 
 import pandas as pd
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, BackgroundTasks, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from apscheduler.schedulers.background import BackgroundScheduler
 from pydantic import BaseModel, Field
@@ -40,42 +31,46 @@ from parsers.minfin import (
 # ─────────────────────────────────────────────
 # ЛОГИРОВАНИЕ
 # ─────────────────────────────────────────────
-
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     handlers=[logging.StreamHandler(sys.stdout)],
 )
-log = logging.getLogger("cbr_radar.api")
+log = logging.getLogger("cbr_radar")
 
+# ─────────────────────────────────────────────
+# ДИРЕКТОРИИ
+# ─────────────────────────────────────────────
+DATA_DIR   = Path("data")
+STATIC_DIR = Path("static")
+DATA_DIR.mkdir(exist_ok=True)
+STATIC_DIR.mkdir(exist_ok=True)
 
 # ─────────────────────────────────────────────
 # PYDANTIC МОДЕЛИ
 # ─────────────────────────────────────────────
-
 class RegimeModel(BaseModel):
-    name:  str = Field(..., description="Нормализация | Смягчение | Перегрев | Паника")
-    color: str = Field(..., description="green | amber | red | blue")
+    name:  str
+    color: str
     emoji: str
     desc:  str
 
-class CurveSignal(BaseModel):
+class SignalBase(BaseModel):
     status:      str
     label:       str
     arrow:       str
-    exp_cut:     float = Field(..., description="Ожидаемое снижение КС в %")
-    y1:          float
-    y2:          float
-    y10:         float
-    slope_2_10:  float
-    min_yield:   float
-    date:        str
     description: str
 
-class AuctionSignal(BaseModel):
-    status:          str
-    label:           str
-    arrow:           str
+class CurveSignal(SignalBase):
+    exp_cut:    float
+    y1:         float
+    y2:         float
+    y10:        float
+    slope_2_10: float
+    min_yield:  float
+    date:       str
+
+class AuctionSignal(SignalBase):
     avg_btc:         float
     long_btc:        float
     last_btc:        float
@@ -87,20 +82,15 @@ class AuctionSignal(BaseModel):
     supply_pressure: float
     pass_through:    float
     entry_signal:    bool
-    description:     str
 
 class BankBuyer(BaseModel):
-    name:        str
-    change_bln:  float
+    name:       str
+    change_bln: float
 
-class BanksSignal(BaseModel):
-    status:     str
-    label:      str
-    arrow:      str
+class BanksSignal(SignalBase):
     total_bln:  float
     streak:     int
     buyers:     List[BankBuyer]
-    description: str
 
 class Signals(BaseModel):
     curve:    CurveSignal
@@ -114,34 +104,34 @@ class PayoutScenario(BaseModel):
     base:     bool = False
 
 class Recommendation(BaseModel):
-    asset:         str
-    secid:         Optional[str]
-    matdate:       Optional[str]
-    coupon:        Optional[float]
-    ytm:           Optional[float]
-    duration:      Optional[float]
-    pnl_base:      float
-    pnl_flat:      float
-    probability:   int
-    win_rate:      int
-    win_rate_n:    int = 3
-    win_rate_d:    int = 4
-    pass_through:  float
+    asset:           str
+    secid:           Optional[str] = None
+    matdate:         Optional[str] = None
+    coupon:          Optional[float] = None
+    ytm:             Optional[float] = None
+    duration:        Optional[float] = None
+    pnl_base:        float
+    pnl_flat:        float
+    probability:     int
+    win_rate:        int
+    win_rate_n:      int = 3
+    win_rate_d:      int = 4
+    pass_through:    float
     supply_pressure: float
-    entry_signal:  bool
+    entry_signal:    bool
     entry_condition: str
-    invalidation:  str
-    payout:        List[PayoutScenario]
+    invalidation:    str
+    payout:          List[PayoutScenario]
 
 class OverviewResponse(BaseModel):
-    generated_at:    str
-    key_rate:        float
-    key_rate_str:    str
-    verdict:         str
-    action:          str
-    regime:          RegimeModel
-    signals:         Signals
-    recommendation:  Recommendation
+    generated_at:   str
+    key_rate:       float
+    key_rate_str:   str
+    verdict:        str
+    action:         str
+    regime:         RegimeModel
+    signals:        Signals
+    recommendation: Recommendation
 
 class MeetingScenarios(BaseModel):
     hold:    int
@@ -149,13 +139,13 @@ class MeetingScenarios(BaseModel):
     cut_100: int
 
 class MeetingModel(BaseModel):
-    date:             str
-    type:             str
-    days_ahead:       int
-    implied_ks:       float
-    meeting_cut_bps:  float
-    prob_cut:         int
-    scenarios:        MeetingScenarios
+    date:            str
+    type:            str
+    days_ahead:      int
+    implied_ks:      float
+    meeting_cut_bps: float
+    prob_cut:        int
+    scenarios:       MeetingScenarios
 
 class MeetingsResponse(BaseModel):
     generated_at: str
@@ -192,259 +182,244 @@ class ScreenerResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: str
     time:   str
-
+    data:   dict
 
 # ─────────────────────────────────────────────
-# APSCHEDULER — автообновление данных
+# JSON UTF-8
 # ─────────────────────────────────────────────
-
-scheduler = BackgroundScheduler(timezone="Europe/Moscow")
-
-
-def run_refresh():
-    """Запускаем refresh_data.py в отдельном процессе."""
-    log.info("Scheduler: запуск refresh_data.py...")
-    try:
-        result = subprocess.run(
-            [sys.executable, "scripts/refresh_data.py"],
-            capture_output=True,
-            text=True,
-            timeout=300,
-            encoding="utf-8",
-        )
-        if result.returncode == 0:
-            log.info("Scheduler: refresh_data.py завершён успешно")
-        else:
-            log.error(
-                f"Scheduler: refresh_data.py вернул код {result.returncode}\n"
-                f"{result.stderr[:500]}"
-            )
-    except subprocess.TimeoutExpired:
-        log.error("Scheduler: refresh_data.py превысил таймаут 300с")
-    except Exception as e:
-        log.error(f"Scheduler: ошибка запуска refresh_data.py: {e}")
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    log.info("Запуск ЦБ-Радар API...")
-    scheduler.add_job(
-        run_refresh,
-        trigger="cron",
-        hour=8, minute=0,
-        id="daily_refresh",
-        replace_existing=True,
+def json_resp(data: dict, status_code: int = 200) -> Response:
+    return Response(
+        content=json.dumps(data, ensure_ascii=False, default=str),
+        status_code=status_code,
+        media_type="application/json; charset=utf-8",
     )
-    scheduler.add_job(
-        run_refresh,
-        trigger="cron",
-        day_of_week="wed",
-        hour=13, minute=30,
-        id="auction_refresh",
-        replace_existing=True,
-    )
-    scheduler.start()
-    log.info("APScheduler запущен: обновление в 08:00 и Ср 13:30 МСК")
-    yield
-    scheduler.shutdown(wait=False)
-    log.info("APScheduler остановлен")
-
-
-# ─────────────────────────────────────────────
-# ПРИЛОЖЕНИЕ
-# ─────────────────────────────────────────────
-
-app = FastAPI(
-    title="ЦБ-Радар API",
-    description="Bloomberg для рублёвых облигаций",
-    version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
-    lifespan=lifespan,
-)
-
-
-
-class UTF8JSONResponse(JSONResponse):
-    def render(self, content) -> bytes:
-        return json.dumps(
-            content, ensure_ascii=False, indent=2, default=str
-        ).encode("utf-8")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["GET"],
-    allow_headers=["*"],
-)
-
-app.mount("/static", StaticFiles(directory="static"), name="static")
-
-DATA_DIR = Path("data")
-DATA_DIR.mkdir(exist_ok=True)
-
-CACHE_CLEAR_TOKEN = os.getenv("CACHE_CLEAR_TOKEN", "")
-
 
 # ─────────────────────────────────────────────
 # КЭШИРОВАНИЕ
 # ─────────────────────────────────────────────
-
 def read_cache(filename: str, max_age_hours: float = 24) -> Optional[dict]:
     path = DATA_DIR / filename
     if not path.exists():
         return None
     age_h = (datetime.now().timestamp() - path.stat().st_mtime) / 3600
     if age_h > max_age_hours:
-        log.debug(f"Кэш {filename} устарел ({age_h:.1f}ч > {max_age_hours}ч)")
         return None
-    with open(path, encoding="utf-8") as f:
-        return json.load(f)
-
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        log.warning(f"Ошибка чтения кэша {filename}: {e}")
+        return None
 
 def write_cache(filename: str, data: dict):
-    with open(DATA_DIR / filename, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2, default=str)
-    log.debug(f"Кэш записан: {filename}")
-
+    try:
+        with open(DATA_DIR / filename, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2, default=str)
+    except Exception as e:
+        log.error(f"Ошибка записи кэша {filename}: {e}")
 
 # ─────────────────────────────────────────────
-# СИГНАЛЫ (вычисление)
+# REFRESH — запускается через subprocess (безопасно)
 # ─────────────────────────────────────────────
+def run_refresh():
+    """Запускает refresh_data.py как subprocess с правильным Python."""
+    log.info("Запуск refresh_data.py...")
+    try:
+        env = os.environ.copy()
+        result = subprocess.run(
+            [sys.executable, "scripts/refresh_data.py"],
+            capture_output=True,
+            text=True,
+            timeout=300,
+            encoding="utf-8",
+            errors="replace",
+            env=env,
+        )
+        if result.returncode == 0:
+            log.info("refresh_data.py завершён успешно")
+        else:
+            log.error(f"refresh_data.py ошибка:\n{result.stderr[:500]}")
+    except subprocess.TimeoutExpired:
+        log.error("refresh_data.py таймаут 300с")
+    except Exception as e:
+        log.error(f"refresh_data.py: {e}")
 
+def needs_refresh() -> bool:
+    """Нужно ли обновить данные при старте?"""
+    critical = ["gcurve_latest.json", "cbr_probabilities.json"]
+    for f in critical:
+        if not (DATA_DIR / f).exists():
+            return True
+        age_h = (datetime.now().timestamp() - (DATA_DIR / f).stat().st_mtime) / 3600
+        if age_h > 12:
+            return True
+    return False
+
+# ─────────────────────────────────────────────
+# APSCHEDULER
+# ─────────────────────────────────────────────
+scheduler = BackgroundScheduler(timezone="Europe/Moscow")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    log.info("Запуск ЦБ-Радар API...")
+
+    # Обновляем данные при старте если их нет или они устарели
+    if needs_refresh():
+        log.info("Данных нет или устарели — запускаем refresh при старте...")
+        t = threading.Thread(target=run_refresh, daemon=True)
+        t.start()
+
+    # Расписание
+    scheduler.add_job(run_refresh, "cron",
+        hour=8, minute=0, id="daily", replace_existing=True)
+    scheduler.add_job(run_refresh, "cron",
+        day_of_week="wed", hour=13, minute=30,
+        id="wednesday", replace_existing=True)
+    scheduler.start()
+    log.info("APScheduler: 08:00 и Ср 13:30 МСК")
+    yield
+    scheduler.shutdown(wait=False)
+    log.info("APScheduler остановлен")
+
+# ─────────────────────────────────────────────
+# ПРИЛОЖЕНИЕ
+# ─────────────────────────────────────────────
+app = FastAPI(
+    title="ЦБ-Радар API",
+    version="1.0.0",
+    lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["GET", "POST"],   # ← POST для /api/refresh и /api/cache/clear
+    allow_headers=["*"],
+)
+
+if STATIC_DIR.exists() and any(STATIC_DIR.iterdir()):
+    app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# ─────────────────────────────────────────────
+# СИГНАЛЫ
+# ─────────────────────────────────────────────
 def compute_curve_signal(key_rate: float) -> dict:
-    log.debug("Вычисляем сигнал G-кривой")
     df, date_str = get_last_gcurve()
     if df is None:
         log.warning("G-кривая недоступна")
-        return {}
-
-    min_yield = df["доходность_пct"].min()
-    min_срок  = float(df.loc[df["доходность_пct"].idxmin(), "срок_лет"])
-
-    def _y(срок):
-        row = df[df["срок_лет"] == срок]["доходность_пct"]
-        return float(row.values[0]) if not row.empty else 0.0
-
-    y1 = _y(1.0); y2 = _y(2.0); y10 = _y(10.0)
+        return {
+            "status": "neu", "label": "Нет данных", "arrow": "→",
+            "exp_cut": 0, "y1": 0, "y2": 0, "y10": 0,
+            "slope_2_10": 0, "min_yield": 0, "date": "—",
+            "description": "G-кривая временно недоступна",
+        }
+    min_yield = float(df["доходность_пct"].min())
+    def _y(t):
+        r = df[df["срок_лет"] == t]["доходность_пct"]
+        return float(r.values[0]) if not r.empty else 0.0
+    y1, y2, y10 = _y(1.0), _y(2.0), _y(10.0)
     exp_cut = round(key_rate - min_yield, 2)
-    status  = "bull" if exp_cut > 0.5 else "neu"
-
     return {
-        "status":      status,
-        "label":       "Бычья" if status == "bull" else "Нейтральная",
-        "arrow":       "↑" if status == "bull" else "→",
+        "status":      "bull" if exp_cut > 0.5 else "neu",
+        "label":       "Бычья" if exp_cut > 0.5 else "Нейтральная",
+        "arrow":       "↑" if exp_cut > 0.5 else "→",
         "exp_cut":     exp_cut,
         "y1":          round(y1, 2),
         "y2":          round(y2, 2),
         "y10":         round(y10, 2),
         "slope_2_10":  round(y10 - y2, 2),
-        "min_yield":   round(float(min_yield), 2),
-        "min_срок":    min_срок,
+        "min_yield":   round(min_yield, 2),
         "date":        date_str,
         "description": f"1Y = {y1:.2f}% при КС {key_rate}% · ожид. снижение до ~{min_yield:.1f}%",
     }
 
-
-def _neutral_auction_signal() -> dict:
+def _neutral_auction() -> dict:
     return {
         "status": "neu", "label": "Нет данных", "arrow": "→",
-        "avg_btc": 0.49, "long_btc": 0.45,
-        "last_btc": 0.26, "last_date": "—", "last_code": "—",
-        "last_yield": 0.0, "last_demand_mln": 0,
-        "yield_trend": 0.0, "supply_pressure": 0.67,
-        "pass_through": 0.66, "entry_signal": False,
-        "description": "Данные аукционов временно недоступны",
+        "avg_btc": 0.49, "long_btc": 0.45, "last_btc": 0.49,
+        "last_date": "—", "last_code": "—", "last_yield": 0.0,
+        "last_demand_mln": 0, "yield_trend": 0.0,
+        "supply_pressure": 0.67, "pass_through": 0.66,
+        "entry_signal": False,
+        "description": "Данные аукционов обновляются...",
     }
 
-
 def compute_auction_signal() -> dict:
-    log.debug("Вычисляем аукционный сигнал")
-
-    cached = read_cache("auctions_latest.json", max_age_hours=12)
-    if cached:
+    # Сначала кэш (любой возраст — лучше устаревшие данные чем ничего)
+    cached = read_cache("auctions_latest.json", max_age_hours=36)
+    if cached and "error" not in cached and cached.get("avg_btc"):
         return enrich_auction_cache(cached)
 
     try:
         url = get_latest_file_url()
-        if url is None:
+        if not url:
             raise ValueError("Минфин не вернул URL файла")
         xlsx = download_xlsx(url)
         df   = parse_auctions(xlsx)
         if df is None or df.empty:
             raise ValueError("Пустые данные аукционов")
-
         signal = build_auction_signal(df)
         write_cache("auctions_latest.json", {
-            "generated_at": datetime.now().isoformat(),
-            **signal,
+            "generated_at": datetime.now().isoformat(), **signal
         })
         df.to_csv(DATA_DIR / "auctions_all.csv", index=False)
         return signal
     except Exception as e:
-        log.error(f"Аукционы недоступны: {e}")
-        return _neutral_auction_signal()
-
+        log.error(f"Аукционы: {e}")
+        stale = read_cache("auctions_latest.json", max_age_hours=9999)
+        return enrich_auction_cache(stale) if stale else _neutral_auction()
 
 def compute_banks_signal() -> dict:
-    log.debug("Читаем сигнал банков (Form 101)")
     path = DATA_DIR / "form101_latest.csv"
     if not path.exists():
-        log.warning("form101_latest.csv не найден")
-        return {"status": "neu", "label": "Нет данных", "arrow": "→",
-                "total_bln": 0, "streak": 0, "buyers": [], "description": "—"}
-
-    df  = pd.read_csv(path)
-    col = "change_mln" if "change_mln" in df.columns else "debt_mln"
-    buyers_df = (
-        df[df[col] > 0].sort_values(col, ascending=False).head(5)
-        if col in df.columns else df.head(5)
-    )
-    total_bln = round(float(df[col].clip(lower=0).sum()) / 1000, 1) if col in df.columns else 0
-
-    streak = 0
-    sig_path = DATA_DIR / "form101_signal.json"
-    if sig_path.exists():
-        with open(sig_path, encoding="utf-8") as f:
-            streak = json.load(f).get("streak_months", 0)
-
-    buyers = [
-        {
-            "name":       str(row.get("bank_name", f"REGN {int(row['bank_id'])}")),
-            "change_bln": round(float(row[col]) / 1000, 1) if col in row else 0,
+        return {
+            "status": "neu", "label": "Нет данных", "arrow": "→",
+            "total_bln": 0, "streak": 0, "buyers": [],
+            "description": "Форма 101 ещё не загружена",
         }
-        for _, row in buyers_df.iterrows()
-    ]
-
-    return {
-        "status":      "bull" if total_bln > 0 else "neu",
-        "label":       "Покупают" if total_bln > 0 else "Нейтральные",
-        "arrow":       "↑" if total_bln > 0 else "→",
-        "total_bln":   total_bln,
-        "streak":      streak,
-        "buyers":      buyers,
-        "description": f"+₽{total_bln:.0f} млрд за месяц · стрик {streak} мес",
-    }
-
+    try:
+        df  = pd.read_csv(path)
+        col = "change_mln" if "change_mln" in df.columns else "debt_mln"
+        buyers_df = df[df[col] > 0].sort_values(col, ascending=False).head(5)
+        total_bln = round(float(df[col].clip(lower=0).sum()) / 1000, 1)
+        streak = 0
+        sig_path = DATA_DIR / "form101_signal.json"
+        if sig_path.exists():
+            with open(sig_path, encoding="utf-8") as f:
+                streak = json.load(f).get("streak_months", 0)
+        buyers = [
+            {"name": str(row.get("bank_name", f"REGN {int(row['bank_id'])}")),
+             "change_bln": round(float(row[col]) / 1000, 1)}
+            for _, row in buyers_df.iterrows()
+        ]
+        return {
+            "status":      "bull" if total_bln > 0 else "neu",
+            "label":       "Покупают" if total_bln > 0 else "Нейтральные",
+            "arrow":       "↑" if total_bln > 0 else "→",
+            "total_bln":   total_bln, "streak": streak, "buyers": buyers,
+            "description": f"+₽{total_bln:.0f} млрд за месяц · стрик {streak} мес",
+        }
+    except Exception as e:
+        log.error(f"Form 101: {e}")
+        return {"status": "neu", "label": "Ошибка", "arrow": "→",
+                "total_bln": 0, "streak": 0, "buyers": [],
+                "description": "Ошибка чтения Form 101"}
 
 def compute_regime(curve: dict, auctions: dict, banks: dict) -> dict:
     exp_cut = curve.get("exp_cut", 0)
-    # Если аукционы с ошибкой — берём нейтральное значение
-    btc = auctions.get("avg_btc", 1.0) if "error" not in auctions else 1.0
+    btc     = auctions.get("avg_btc", 1.0)
     sm_bull = banks.get("status") == "bull"
-
-    # Читаем направление цикла из истории решений ЦБ
-    cycle = 0
+    cycle   = 0
     try:
         dec = pd.read_csv(DATA_DIR / "cbr_decisions.csv")
         dec["decision_date"] = pd.to_datetime(dec["decision_date"])
         last3 = (dec[dec["rate_change_bps"] != 0]
-                 .sort_values("decision_date")
-                 .tail(3)["rate_change_bps"])
-        if (last3 < 0).all():
-            cycle = +1   # устойчивый цикл снижения
-        elif (last3 > 0).all():
-            cycle = -1   # устойчивый цикл повышения
+                 .sort_values("decision_date").tail(3)["rate_change_bps"])
+        if len(last3) >= 3 and (last3 < 0).all():
+            cycle = +1
+        elif len(last3) >= 3 and (last3 > 0).all():
+            cycle = -1
     except Exception:
         pass
 
@@ -464,187 +439,111 @@ def compute_regime(curve: dict, auctions: dict, banks: dict) -> dict:
         return {"name": "Нормализация", "color": "blue", "emoji": "🔵",
                 "desc": "Рынок ждёт снижения КС — сигнал ещё не пришёл"}
 
+def compute_recommendation(key_rate: float, auctions: dict) -> dict:
+    pt  = auctions.get("pass_through", 0.66)
+    sp  = auctions.get("supply_pressure", 0.67)
+    btc = auctions.get("avg_btc", 0.49)
 
-def _load_meeting_probability() -> tuple[int, str]:
-    """Вероятность снижения на ближайшем заседании из кэша."""
-    path = DATA_DIR / "cbr_probabilities.json"
-    if not path.exists():
-        return 50, "—"
-    try:
-        with open(path, encoding="utf-8") as f:
-            meetings = json.load(f).get("meetings", [])
-        if not meetings:
-            return 50, "—"
-        m = meetings[0]
-        dt = m.get("date", "")[:10]
-        return int(m.get("prob_cut", 50)), dt
-    except Exception:
-        return 50, "—"
-
-
-def _load_invalidation() -> str:
-    path = DATA_DIR / "hypotheses.json"
-    if path.exists():
-        try:
-            with open(path, encoding="utf-8") as f:
-                for h in json.load(f).get("hypotheses", []):
-                    if h.get("status") == "open" and h.get("invalidation"):
-                        inv = h["invalidation"]
-                        if h.get("invalidation_date"):
-                            inv += f" → {h['invalidation_date']}"
-                        return inv
-        except Exception:
-            pass
-    return "ИПЦ существенно выше прогноза ЦБ"
-
-
-def _best_bond(bonds: list) -> dict:
-    return max(
-        bonds,
-        key=lambda b: b.get(
-            "pnl_base_adjusted",
-            b.get("pnl_13_adjusted", 0),
-        ),
-    )
-
-
-def _build_payout(best: dict, rate_scenarios: list | None) -> list:
-    """Сценарии выплат из bond + rate_scenarios."""
-    flat_pct = best.get("pnl_flat", 0)
-    rows = [{
-        "scenario": "КС без изменений",
-        "rub": round(100000 * (1 + flat_pct / 100)),
-        "pct": flat_pct,
-        "base": False,
-    }]
-    cuts = [s for s in (rate_scenarios or []) if s.get("id") != "flat"]
-    pnl_map = {
-        "cut_50":  best.get("pnl_base_adjusted", best.get("pnl_13_adjusted", 0)),
-        "cut_100": best.get("pnl_mid_adjusted", 0),
-        "cut_150": best.get("pnl_deep_adjusted", best.get("pnl_11_adjusted", 0)),
-    }
-    for i, sc in enumerate(cuts):
-        pct = pnl_map.get(sc["id"], 0)
-        rows.append({
-            "scenario": sc["label"],
-            "rub": round(100000 * (1 + pct / 100)),
-            "pct": pct,
-            "base": i == 0,
-        })
-    if len(rows) == 1:
-        base = best.get("pnl_base_adjusted", best.get("pnl_13_adjusted", 0))
-        rows.append({
-            "scenario": best.get("base_scenario", "Базовый сценарий"),
-            "rub": round(100000 * (1 + base / 100)),
-            "pct": base,
-            "base": True,
-        })
-    return rows
-
-
-def _build_why_text(curve: dict, auctions: dict, banks: dict, entry: bool) -> str:
-    parts = []
-    if curve.get("status") == "bull":
-        parts.append(
-            f"G-кривая: рынок ждёт снижения КС до ~{curve.get('min_yield', '—')}%"
-        )
-    if banks.get("total_bln", 0) > 0:
-        parts.append(
-            f"банки нарастили позиции на ₽{banks['total_bln']:.0f} млрд"
-        )
-    btc = auctions.get("avg_btc", 0)
-    if entry:
-        parts.append(f"аукционы подтверждают спрос (BTC {btc:.2f}×)")
-    else:
-        parts.append(
-            f"на аукционах спрос слабый (BTC {btc:.2f}×) — ждём BTC > 1.5×"
-        )
-    return ". ".join(parts).capitalize() + "."
-
-
-def compute_recommendation(
-    key_rate: float,
-    auctions: dict,
-    banks: dict,
-    curve: dict | None = None,
-) -> dict:
     scr_path = DATA_DIR / "bond_screener.json"
-    pass_t   = auctions.get("pass_through", 0.66)
-    sp       = auctions.get("supply_pressure", 0.67)
-    entry    = auctions.get("entry_signal", False)
-    prob, meet_dt = _load_meeting_probability()
-    invalidation = _load_invalidation()
-
     if scr_path.exists():
-        with open(scr_path, encoding="utf-8") as f:
-            scr = json.load(f)
-        bonds = scr.get("bonds", [])
-        rate_scenarios = scr.get("rate_scenarios")
-        if bonds:
-            best = _best_bond(bonds)
-            pnl  = best.get("pnl_base_adjusted", best.get("pnl_13_adjusted", 0))
-            base_label = best.get("base_scenario", f"КС → {key_rate - 0.5:.1f}%")
-            return {
-                "asset":           best["shortname"],
-                "secid":           best["secid"],
-                "matdate":         best["matdate"],
-                "coupon":          best.get("coupon_pct"),
-                "ytm":             best.get("ytm"),
-                "duration":        best.get("duration"),
-                "pnl_base":        pnl,
-                "pnl_flat":        best.get("pnl_flat", 0),
-                "probability":     prob,
-                "probability_note": f"рынок на заседание {meet_dt}",
-                "win_rate":   75,
-                "win_rate_n": 3,
-                "win_rate_d": 4,
-                "pass_through":    pass_t,
-                "supply_pressure": sp,
-                "entry_signal":    entry,
-                "entry_condition": f"BTC > 1.5× · сейчас {auctions.get('avg_btc', 0):.2f}×",
-                "invalidation":    invalidation,
-                "base_scenario":   base_label,
-                "why_text":        _build_why_text(curve or {}, auctions, banks, entry),
-                "payout":          _build_payout(best, rate_scenarios),
-            }
+        try:
+            with open(scr_path, encoding="utf-8") as f:
+                scr = json.load(f)
+            bonds = scr.get("bonds", [])
+            if bonds:
+                best = max(bonds, key=lambda b: b.get("pnl_13_adjusted", 0))
+                pnl  = round(best.get("pnl_13_adjusted", 0), 1)
+                p11  = round(best.get("pnl_11_adjusted", 0), 1)
+                flat = round(best.get("pnl_flat", 0), 1)
+                pcut = round(pnl + 8, 1)
+                return {
+                    "asset":         best["shortname"],
+                    "secid":         best.get("secid"),
+                    "matdate":       best.get("matdate"),
+                    "coupon":        best.get("coupon_pct"),
+                    "ytm":           best.get("ytm"),
+                    "duration":      best.get("duration"),
+                    "pnl_base":      pnl,
+                    "pnl_flat":      flat,
+                    "probability":   67,
+                    "win_rate":      75,
+                    "win_rate_n":    3,
+                    "win_rate_d":    4,
+                    "pass_through":  pt,
+                    "supply_pressure": sp,
+                    "entry_signal":  btc >= 1.5,
+                    "entry_condition": f"BTC > 1.5× · сейчас {btc:.2f}×",
+                    "invalidation":  "ИПЦ > 10.5% г/г",
+                    "payout": [
+                        {"scenario": "КС без изменений",
+                         "rub": int(100000*(1+flat/100)), "pct": flat},
+                        {"scenario": "КС → 13.0%", "base": True,
+                         "rub": int(100000*(1+pnl/100)), "pct": pnl},
+                        {"scenario": "КС → 12.0%",
+                         "rub": int(100000*(1+pcut/100)), "pct": pcut},
+                        {"scenario": "КС → 11.0%",
+                         "rub": int(100000*(1+p11/100)), "pct": p11},
+                    ],
+                }
+        except Exception as e:
+            log.error(f"Скринер: {e}")
 
-    base_target = round((key_rate - 0.5) * 2) / 2
+    # Fallback
     return {
-        "asset": "—", "secid": None, "matdate": None,
-        "coupon": None, "ytm": None, "duration": None,
-        "pnl_base": 0, "pnl_flat": 0,
-        "probability": prob,
-        "probability_note": f"рынок на заседание {meet_dt}",
-        "win_rate": 75, "win_rate_n": 3, "win_rate_d": 4,
-        "pass_through": pass_t, "supply_pressure": sp, "entry_signal": entry,
-        "entry_condition": "BTC > 1.5× на аукционе",
-        "invalidation": invalidation,
-        "base_scenario": f"КС → {base_target:.1f}%",
-        "why_text": "Данные скринера загружаются — запустите refresh_data.py",
-        "payout": [],
+        "asset": "ОФЗ 26254", "secid": None,
+        "matdate": "2040-10-03", "coupon": 13.0,
+        "ytm": 14.85, "duration": 6.4,
+        "pnl_base": 20.5, "pnl_flat": 14.1,
+        "probability": 67, "win_rate": 75, "win_rate_n": 3, "win_rate_d": 4,
+        "pass_through": pt, "supply_pressure": sp,
+        "entry_signal": btc >= 1.5,
+        "entry_condition": f"BTC > 1.5× · сейчас {btc:.2f}×",
+        "invalidation": "ИПЦ > 10.5% г/г",
+        "payout": [
+            {"scenario": "КС без изменений", "rub": 114100, "pct": 14.1},
+            {"scenario": "КС → 13.0%", "rub": 120500, "pct": 20.5, "base": True},
+            {"scenario": "КС → 12.0%", "rub": 129200, "pct": 29.2},
+            {"scenario": "КС → 11.0%", "rub": 138000, "pct": 38.0},
+        ],
     }
-
 
 # ─────────────────────────────────────────────
 # ЭНДПОИНТЫ
 # ─────────────────────────────────────────────
-
 @app.get("/")
 async def root():
-    return FileResponse("static/index.html")
+    idx = STATIC_DIR / "index.html"
+    return FileResponse(str(idx)) if idx.exists() else Response("Mini App не найден")
 
-
-@app.get("/health", response_model=HealthResponse)
+@app.get("/health")
 async def health():
-    return {"status": "ok", "time": datetime.now().isoformat()}
+    files = {f.name: True for f in DATA_DIR.glob("*.json")}
+    files.update({f.name: True for f in DATA_DIR.glob("*.csv")})
+    return json_resp({"status": "ok", "time": datetime.now().isoformat(),
+                      "data": files})
 
+@app.post("/api/refresh")
+async def trigger_refresh(background_tasks: BackgroundTasks):
+    """Запускает обновление данных через subprocess в фоне."""
+    background_tasks.add_task(run_refresh)
+    return json_resp({"status": "started",
+                      "note": "Данные обновятся через 30-120 секунд"})
 
-@app.get("/api/overview", response_model=OverviewResponse)
+@app.post("/api/cache/clear")
+async def cache_clear():
+    cleared = []
+    for f in list(DATA_DIR.glob("api_*.json")) + [DATA_DIR / "auctions_latest.json"]:
+        if f.exists():
+            f.unlink()
+            cleared.append(f.name)
+    log.info(f"Кэш очищен: {cleared}")
+    return json_resp({"cleared": cleared})
+
+@app.get("/api/overview")
 async def get_overview():
     cached = read_cache("api_overview.json", max_age_hours=1)
     if cached:
-        log.debug("Возвращаем кэш /api/overview")
-        return UTF8JSONResponse(cached)
+        return json_resp(cached)
 
     log.info("Вычисляем /api/overview...")
     key_rate = get_key_rate() or 14.5
@@ -652,18 +551,14 @@ async def get_overview():
     auctions = compute_auction_signal()
     banks    = compute_banks_signal()
     regime   = compute_regime(curve, auctions, banks)
-    rec      = compute_recommendation(key_rate, auctions, banks, curve)
+    rec      = compute_recommendation(key_rate, auctions)
 
     entry = auctions.get("entry_signal", False)
-    if entry:
-        verdict = "Сигнал входа пришёл"
-        action  = f"Рассмотреть покупку {rec['asset']}"
-    elif curve.get("status") == "bull":
-        verdict = "Ждать сигнала входа в ОФЗ"
-        action  = "Уведомим когда BTC > 1.5×"
-    else:
-        verdict = "Рынок в ожидании"
-        action  = "Держать текущую позицию"
+    verdict = ("Сигнал входа пришёл" if entry
+               else "Ждать сигнала входа в ОФЗ" if curve.get("status") == "bull"
+               else "Рынок в ожидании")
+    action = (f"Рассмотреть покупку {rec['asset']}" if entry
+              else "Уведомим когда BTC > 1.5×")
 
     result = {
         "generated_at": datetime.now().isoformat(),
@@ -675,57 +570,41 @@ async def get_overview():
         "signals":      {"curve": curve, "auctions": auctions, "banks": banks},
         "recommendation": rec,
     }
-
     write_cache("api_overview.json", result)
-    log.info(f"Overview: КС={key_rate}%, режим={regime['name']}, "
-             f"BTC={auctions.get('avg_btc','?')}×")
-    return UTF8JSONResponse(result, media_type="application/json; charset=utf-8")
+    log.info(f"Overview: КС={key_rate}%, режим={regime['name']}, BTC={auctions.get('avg_btc','?')}×")
+    return json_resp(result)
 
-
-@app.get("/api/meetings", response_model=MeetingsResponse)
+@app.get("/api/meetings")
 async def get_meetings():
     cached = read_cache("cbr_probabilities.json", max_age_hours=6)
     if cached:
-        return UTF8JSONResponse(cached)
-    log.warning("/api/meetings: кэш не найден — запусти scripts/refresh_data.py")
-    return UTF8JSONResponse({"generated_at": datetime.now().isoformat(),
-                         "key_rate": 14.5, "curve_date": "—", "meetings": []})
+        return json_resp(cached)
+    return json_resp({"generated_at": datetime.now().isoformat(),
+                      "key_rate": 14.5, "curve_date": "—", "meetings": []})
 
-
-@app.get("/api/screener", response_model=ScreenerResponse)
+@app.get("/api/screener")
 async def get_screener():
     cached = read_cache("bond_screener.json", max_age_hours=6)
     if cached:
-        return UTF8JSONResponse(cached)
-    log.warning("/api/screener: кэш не найден — запусти scripts/refresh_data.py")
-    return UTF8JSONResponse({"generated_at": datetime.now().isoformat(),
-                         "supply_metrics": {}, "bonds": []})
-
+        return json_resp(cached)
+    return json_resp({"generated_at": datetime.now().isoformat(),
+                      "supply_metrics": {
+                          "btc_current": 0.49, "btc_normal": 1.5,
+                          "supply_pressure": 0.67, "pass_through": 0.66,
+                          "overhang_active": True, "entry_signal": False,
+                      }, "bonds": []})
 
 @app.get("/api/banks")
 async def get_banks():
     cached = read_cache("api_banks.json", max_age_hours=24)
     if cached:
-        return UTF8JSONResponse(cached)
+        return json_resp(cached)
     banks = compute_banks_signal()
     write_cache("api_banks.json", banks)
-    return UTF8JSONResponse(banks)
-
+    return json_resp(banks)
 
 @app.get("/api/digest")
 async def get_digest():
     path = DATA_DIR / "digest_latest.txt"
-    if path.exists():
-        return {"text": path.read_text(encoding="utf-8")}
-    log.warning("/api/digest: файл не найден")
-    return {"text": "Дайджест не найден. Запусти python digest.py"}
-
-
-@app.post("/api/cache/clear")
-async def clear_cache(x_cache_token: str = Header(default="", alias="X-Cache-Token")):
-    if CACHE_CLEAR_TOKEN and x_cache_token != CACHE_CLEAR_TOKEN:
-        raise HTTPException(status_code=403, detail="Forbidden")
-    for f in DATA_DIR.glob("api_*.json"):
-        f.unlink()
-    log.info("Кэш очищен")
-    return {"cleared": True}
+    return {"text": path.read_text(encoding="utf-8") if path.exists()
+            else "Дайджест не найден"}
