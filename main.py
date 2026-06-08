@@ -608,3 +608,5 @@ async def get_digest():
     path = DATA_DIR / "digest_latest.txt"
     return {"text": path.read_text(encoding="utf-8") if path.exists()
             else "Дайджест не найден"}
+
+            
