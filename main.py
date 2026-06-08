@@ -729,27 +729,3 @@ async def clear_cache(x_cache_token: str = Header(default="", alias="X-Cache-Tok
         f.unlink()
     log.info("Кэш очищен")
     return {"cleared": True}
-
-@app.post("/api/refresh")
-async def trigger_refresh():
-    """Обновляет все данные напрямую из FastAPI процесса."""
-    import asyncio
-    results = {}
-
-    try:
-        from scripts.refresh_data import (
-            refresh_gcurve, refresh_auctions,
-            refresh_probabilities, refresh_screener
-        )
-        refresh_gcurve();      results["gcurve"]       = "OK"
-        refresh_auctions();    results["auctions"]     = "OK"
-        refresh_probabilities(); results["meetings"]   = "OK"
-        refresh_screener();    results["screener"]     = "OK"
-    except Exception as e:
-        results["error"] = str(e)
-
-    # Инвалидируем кэш
-    for f in DATA_DIR.glob("api_*.json"):
-        f.unlink()
-
-    return results
