@@ -393,12 +393,26 @@ def compute_banks_signal() -> dict:
              "change_bln": round(float(row[col]) / 1000, 1)}
             for _, row in buyers_df.iterrows()
         ]
+
+        why_now = ""
+        try:
+            from scripts.narrative import generate_banks_narrative
+            narr    = generate_banks_narrative(
+                streak=streak,
+                total_bln=total_bln,
+            )
+            why_now = narr.get("why_now", "")
+        except Exception as ne:
+            log.warning(f"Narrative: {ne}")
+
+
         return {
             "status":      "bull" if total_bln > 0 else "neu",
             "label":       "Покупают" if total_bln > 0 else "Нейтральные",
             "arrow":       "↑" if total_bln > 0 else "→",
             "total_bln":   total_bln, "streak": streak, "buyers": buyers,
             "description": f"+₽{total_bln:.0f} млрд за месяц · стрик {streak} мес",
+            "why_now":     why_now,   # ← новое поле
         }
     except Exception as e:
         log.error(f"Form 101: {e}")
@@ -609,4 +623,3 @@ async def get_digest():
     return {"text": path.read_text(encoding="utf-8") if path.exists()
             else "Дайджест не найден"}
 
-            

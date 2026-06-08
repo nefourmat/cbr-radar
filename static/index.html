@@ -680,11 +680,13 @@ async function loadAll() {
 }
 
 function renderOverview(ov) {
+  
   if (!ov) return;
   const r = ov.regime || {}, rec = ov.recommendation || {}, sig = ov.signals || {};
   const cur = sig.curve || {}, auc = sig.auctions || {}, bnk = sig.banks || {};
 
   const week = ov.generated_at ? new Date(ov.generated_at) : new Date();
+  
   $('regime-kicker').textContent = `Режим рынка · КС ${ov.key_rate || '—'}% · ${week.toLocaleDateString('ru',{day:'numeric',month:'short'})}`;
   $('regime-name').textContent = r.name || '—';
   $('regime-desc').textContent = r.desc || ov.verdict || '';
@@ -712,7 +714,8 @@ function renderOverview(ov) {
   $('rec-prob-note').textContent = rec.probability_note || 'ближайшее заседание';
   $('rec-flat').textContent = rec.pnl_flat != null ? `+${rec.pnl_flat}%` : '—';
 
-  $('why-text').innerHTML = (rec.why_text || ov.action || '—').replace(/\b(₽[\d.]+ млрд|BTC [\d.]+×|G-кривая[^.]*)/g, '<b>$1</b>');
+  $('why-text').innerHTML = (bnk.why_now || rec.why_text || ov.action || '—')
+  .replace(/\b(₽[\d.]+ млрд|BTC [\d.]+×|\d+\.\d+%)/g, '<b>$1</b>');
 
   $('payout-sub').textContent = `${rec.asset || 'ОФЗ'} · с поправкой на supply overhang`;
   const prow = $('payout-rows');
