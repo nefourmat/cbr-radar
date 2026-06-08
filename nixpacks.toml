@@ -1,2 +1,8 @@
 [phases.setup]
-nixPkgs = ["p7zip", "stdenv.cc.cc.lib"]
+nixPkgs = ["python312", "p7zip"]
+
+[phases.install]
+cmds = ["pip install -r requirements.txt"]
+
+[deploy]
+startCommand = "uvicorn main:app --host 0.0.0.0 --port $PORT"
