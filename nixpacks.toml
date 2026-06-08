@@ -1,2 +1,2 @@
 [phases.setup]
-aptPkgs = ["p7zip-full", "libstdc++6", "libgomp1"]
+nixPkgs = ["p7zip", "stdenv.cc.cc.lib"]
