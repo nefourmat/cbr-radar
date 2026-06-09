@@ -9,10 +9,11 @@ scripts/refresh_data.py
   1. G-кривая + КС → gcurve signal
   2. Аукционы → auction signal
   3. Вероятности заседаний ЦБ → cbr_probabilities
-  4. Скринер ОФЗ → bond_screener
-  5. Form 101 → form101_latest (если не старше 25 дней)
-  6. Дайджест → digest_latest
-  7. Сборный API кэш → api_overview
+  4. Инфляция → inflation_latest
+  5. Скринер ОФЗ → bond_screener
+  6. Form 101 → form101_latest (если не старше 25 дней)
+  7. Дайджест → digest_latest
+  8. Сборный API кэш → api_overview
 """
 
 import sys
@@ -147,7 +148,40 @@ def refresh_probabilities():
 
 
 # ─────────────────────────────────────────────
-# 4. СКРИНЕР ОФЗ
+# 4. ИНФЛЯЦИЯ
+# ─────────────────────────────────────────────
+
+def refresh_inflation():
+    with step("Инфляция"):
+        from parsers.inflation import get_inflation_data, build_inflation_signal
+        from parsers.inflation_expectations import get_inflation_expectations
+        from parsers.gcurve import get_key_rate
+
+        rows = get_inflation_data()
+        assert rows, "Не удалось получить данные по инфляции"
+
+        # инФОМ (наблюдаемая/ожидаемая) — опционально, не роняем шаг при сбое
+        try:
+            expectations = get_inflation_expectations()
+        except Exception as e:
+            log.warning(f"  инФОМ недоступен: {e}")
+            expectations = None
+
+        key_rate = get_key_rate() or 14.5
+        signal   = build_inflation_signal(rows, key_rate=key_rate,
+                                          expectations=expectations)
+        result   = {"generated_at": datetime.now().isoformat(), **signal}
+        _write("inflation_latest.json", result)
+        obs = signal.get("observed")
+        log.info(
+            f"  инфляция = {signal['infl_yoy']}% г/г, "
+            f"реальная ставка = {signal['real_rate']} п.п."
+            + (f", наблюдаемая = {obs}%" if obs is not None else "")
+        )
+
+
+# ─────────────────────────────────────────────
+# 5. СКРИНЕР ОФЗ
 # ─────────────────────────────────────────────
 
 def refresh_screener():
@@ -195,7 +229,7 @@ def refresh_screener():
 
 
 # ─────────────────────────────────────────────
-# 5. FORM 101 (только если данные устарели)
+# 6. FORM 101 (только если данные устарели)
 # ─────────────────────────────────────────────
 
 def _form101_cache_valid(path) -> bool:
@@ -235,7 +269,7 @@ def refresh_form101():
 
 
 # ─────────────────────────────────────────────
-# 6. ДАЙДЖЕСТ
+# 7. ДАЙДЖЕСТ
 # ─────────────────────────────────────────────
 
 def refresh_digest():
@@ -252,7 +286,7 @@ def refresh_digest():
 
 
 # ─────────────────────────────────────────────
-# 7. СБОРНЫЙ API КЭШ
+# 8. СБОРНЫЙ API КЭШ
 # ─────────────────────────────────────────────
 
 def refresh_api_overview():
@@ -301,6 +335,7 @@ if __name__ == "__main__":
     refresh_gcurve()
     refresh_auctions()
     refresh_probabilities()
+    refresh_inflation()
     refresh_screener()
     refresh_form101()
     refresh_digest()

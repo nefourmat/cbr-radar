@@ -27,6 +27,8 @@ from parsers.minfin import (
     get_latest_file_url, download_xlsx, parse_auctions,
     build_auction_signal, enrich_auction_cache,
 )
+from parsers.inflation import get_inflation_data, build_inflation_signal
+from parsers.inflation_expectations import get_inflation_expectations
 
 # ─────────────────────────────────────────────
 # ЛОГИРОВАНИЕ
@@ -312,6 +314,38 @@ def compute_banks_signal() -> dict:
                 "total_bln": 0, "streak": 0, "buyers": [],
                 "description": "Ошибка чтения Form 101"}
 
+def compute_inflation_signal(key_rate: float) -> dict:
+    """
+    Инфляция + реальная ставка (КС − инфляция).
+    Сначала кэш (любой возраст лучше, чем ничего), затем живой источник ЦБ.
+    """
+    cached = read_cache("inflation_latest.json", max_age_hours=24)
+    if cached and "error" not in cached and cached.get("infl_yoy"):
+        return cached
+
+    try:
+        rows = get_inflation_data()
+        if not rows:
+            raise ValueError("ЦБ не вернул данные по инфляции")
+        # инФОМ (наблюдаемая/ожидаемая) — опционально, не должно ронять сигнал
+        try:
+            expectations = get_inflation_expectations()
+        except Exception as ee:
+            log.warning(f"инФОМ: {ee}")
+            expectations = None
+        signal = build_inflation_signal(rows, key_rate=key_rate,
+                                        expectations=expectations)
+        write_cache("inflation_latest.json", {
+            "generated_at": datetime.now().isoformat(), **signal
+        })
+        return signal
+    except Exception as e:
+        log.error(f"Инфляция: {e}")
+        stale = read_cache("inflation_latest.json", max_age_hours=9999)
+        if stale and stale.get("infl_yoy"):
+            return stale
+        return build_inflation_signal(None, key_rate=key_rate)
+
 def compute_regime(curve: dict, auctions: dict, banks: dict) -> dict:
     exp_cut = curve.get("exp_cut", 0)
     btc     = auctions.get("avg_btc", 1.0)
@@ -453,19 +487,25 @@ async def get_overview():
         return json_resp(cached)
 
     log.info("Вычисляем /api/overview...")
-    key_rate = get_key_rate() or 14.5
-    curve    = compute_curve_signal(key_rate)
-    auctions = compute_auction_signal()
-    banks    = compute_banks_signal()
-    regime   = compute_regime(curve, auctions, banks)
-    rec      = compute_recommendation(key_rate, auctions)
+    key_rate  = get_key_rate() or 14.5
+    curve     = compute_curve_signal(key_rate)
+    auctions  = compute_auction_signal()
+    banks     = compute_banks_signal()
+    inflation = compute_inflation_signal(key_rate)
+    regime    = compute_regime(curve, auctions, banks)
+    rec       = compute_recommendation(key_rate, auctions)
 
     entry = auctions.get("entry_signal", False)
     verdict = ("Сигнал входа пришёл" if entry
                else "Ждать сигнала входа в ОФЗ" if curve.get("status") == "bull"
                else "Рынок в ожидании")
-    action = (f"Рассмотреть покупку {rec['asset']}" if entry
-              else "Уведомим когда BTC > 1.5×")
+    if entry:
+        action = f"Рассмотреть покупку {rec['asset']}"
+    elif inflation.get("status") == "bull" and inflation.get("real_rate", 0) >= 4:
+        action = (f"Реальная ставка {inflation['real_rate']:.1f} п.п. · "
+                  f"дезинфляция → ждём сигнал входа (BTC > 1.5×)")
+    else:
+        action = "Уведомим когда BTC > 1.5×"
 
     result = {
         "generated_at": datetime.now().isoformat(),
@@ -474,7 +514,8 @@ async def get_overview():
         "verdict":      verdict,
         "action":       action,
         "regime":       regime,
-        "signals":      {"curve": curve, "auctions": auctions, "banks": banks},
+        "signals":      {"curve": curve, "auctions": auctions,
+                          "banks": banks, "inflation": inflation},
         "recommendation": rec,
     }
     write_cache("api_overview.json", result)
@@ -509,6 +550,14 @@ async def get_banks():
     banks = compute_banks_signal()
     write_cache("api_banks.json", banks)
     return json_resp(banks)
+
+@app.get("/api/inflation")
+async def get_inflation():
+    cached = read_cache("inflation_latest.json", max_age_hours=24)
+    if cached:
+        return json_resp(cached)
+    key_rate = get_key_rate() or 14.5
+    return json_resp(compute_inflation_signal(key_rate))
 
 @app.get("/api/digest")
 async def get_digest():

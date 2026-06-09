@@ -142,6 +142,25 @@ def get_cbr_probabilities():
     return data.get("meetings", [])
 
 
+def get_inflation_signal(key_rate=None):
+    """Сигнал по инфляции (реальная ставка = КС − инфляция, + инФОМ)."""
+    try:
+        from parsers.inflation import get_inflation_data, build_inflation_signal
+        rows = get_inflation_data()
+        if not rows:
+            return None
+        # инФОМ (наблюдаемая/ожидаемая) — опционально
+        try:
+            from parsers.inflation_expectations import get_inflation_expectations
+            expectations = get_inflation_expectations()
+        except Exception:
+            expectations = None
+        return build_inflation_signal(rows, key_rate=key_rate,
+                                      expectations=expectations)
+    except Exception:
+        return None
+
+
 # ─────────────────────────────────────────────
 # ГИПОТЕЗЫ
 # ─────────────────────────────────────────────
@@ -335,6 +354,45 @@ def compose_digest(curve, auctions, smart_money, hypotheses):
         L.append("  Счета 501/502/504 — все долговые ЦБ (не только ОФЗ)")
     else:
         L.append("  Нет данных — запусти parsers/form101.py")
+
+    # ── 4½. ИНФЛЯЦИЯ ──────────────────────────
+    # КС восстанавливаем из кривой (y1 + ожидаемое снижение)
+    ks_for_infl = None
+    try:
+        ks_for_infl = round(curve["y1"] + curve["ожид_снижение"], 1)
+    except Exception:
+        ks_for_infl = None
+    infl = get_inflation_signal(ks_for_infl)
+    if infl:
+        i_arr = infl.get("arrow", "→")
+        i_lab = infl.get("label", "Нет данных")
+        L += [f"\n  ④ Инфляция (Росстат){'':>28}{i_arr} {i_lab}",
+              f"  {div('─')}"]
+        yoy    = infl.get("infl_yoy")
+        target = infl.get("target", 4.0)
+        period = infl.get("date", "")
+        if yoy is not None:
+            gap = infl.get("gap_vs_target")
+            gap_s = f"  (отклонение {gap:+.2f} п.п.)" if gap is not None else ""
+            L.append(f"  {yoy:.1f}% г/г при цели {target:.0f}%{gap_s}  ·  {period}")
+        real = infl.get("real_rate")
+        if real is not None:
+            tone = "ДКП жёсткая" if real >= 5 else ("ДКП нейтральна" if real >= 2 else "ДКП мягкая")
+            L.append(f"  Реальная ставка {real:+.2f} п.п. (КС − инфляция)  —  {tone}")
+        t3 = infl.get("trend_3m")
+        if t3 is not None:
+            t_dir = "замедляется" if t3 < 0 else ("ускоряется" if t3 > 0 else "стабильна")
+            L.append(f"  Тренд 3 мес: {t3:+.2f} п.п. — инфляция {t_dir}")
+        # инФОМ: восприятие населения (может отсутствовать)
+        observed = infl.get("observed")
+        if observed is not None:
+            expected = infl.get("expected")
+            exp_s = f" · ожидаемая {expected:.1f}%" if expected is not None else ""
+            L.append(f"  Наблюдаемая (инФОМ) {observed:.1f}%{exp_s}")
+            # разрыв доверия: люди ощущают инфляцию намного выше официальной
+            if yoy is not None and yoy > 0:
+                ratio = observed / yoy
+                L.append(f"  → Люди ощущают инфляцию в {ratio:.1f}× выше Росстата (разрыв доверия)")
 
     # ── 5. РАСХОЖДЕНИЕ ────────────────────────
     if divergence:
