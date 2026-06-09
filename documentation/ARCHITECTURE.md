@@ -230,6 +230,53 @@ adj_yield_cut   = cut_bps × pass_through
 
 ---
 
+## Telegram-бот (`bot.py`)
+
+PTB 21 (async). Получает данные через HTTP `GET {API_BASE}/api/overview`
+(не дёргает пайплайн напрямую — нет гонок с инвалидацией кэша).
+
+**Команды** (видны в меню бота через `set_my_commands`):
+`/start` `/pulse` `/calendar` `/signal` `/digest` `/settings`.
+
+**Подписки на уведомления** (`core/subscriptions.py`):
+хранилище `data/subscribers.json` (`{chat_id: {subs: {key: bool}}}`, атомарная запись).
+Типы: ежедневный пульс, заседания ЦБ, сигнал входа, аукционы, инфляция, недельный дайджест.
+`/settings` — inline-клавиатура с тумблерами (CallbackQuery, ✅/⬜️, правка сообщения на месте).
+
+**Рассылки** (`broadcast()`): троттлинг ~20 msg/s; при `Forbidden` (бот заблокирован)
+подписчик удаляется. Канал (`CHANNEL_ID`) — опционально, дублирует рассылку.
+
+**Планировщик (APScheduler, МСК):**
+| Job | Когда | Кому |
+|-----|-------|------|
+| `daily_pulse` | 09:00 ежедневно | подписка `daily_pulse` |
+| `meeting_reminders` | 09:05 ежедневно (за 3/1/0 дн) | `meetings` |
+| `inflation_check` | 12:00 ежедневно (при новом периоде) | `inflation` |
+| `weekly_digest` | пт 09:00 | `weekly_digest` + канал |
+| `auction_alert` | ср 13:10 | `entry_signal`/`auctions` + канал |
+
+`data/notify_state.json` — дедуп (например, период инфляции, о котором уже уведомили).
+
+**Календарь событий** (`core/events.py`): заседания ЦБ (точные даты из
+`cbr_probabilities.CBR_MEETINGS`) + резюме обсуждения + еженедельные аукционы/инфляция
++ ежемесячные публикации (ИПЦ, инФОМ, Форма 101). Точные события — `confirmed=True`,
+периодические — «(ожидается)».
+
+**Ежедневный пульс** (`core/pulse.py`): компактная утренняя сводка
+(режим, КС, 4 сигнала, идея, ближайшее событие, вердикт).
+
+**Переменные окружения бота:** `BOT_TOKEN`, `WEBAPP_URL`, `API_BASE` (по умолчанию = WEBAPP_URL),
+`CHANNEL_ID` (опц.).
+
+**Настройка в @BotFather (вручную):** задать описание/about, картинку, и
+кнопку Menu → Web App на `WEBAPP_URL` (Bot Settings → Menu Button).
+
+> ⚠️ **Важно:** `data/subscribers.json` лежит на файловой системе сервиса бота.
+> На Railway ФС эфемерна — при редеплое подписки сбрасываются. Для прод-надёжности
+> нужен персистентный том или БД (Supabase) — см. «Известные ограничения».
+
+---
+
 ## API (FastAPI)
 
 **Base URL:** `https://cbr-radar-production.up.railway.app`
@@ -243,6 +290,7 @@ adj_yield_cut   = cut_bps × pass_through
 | `GET /api/screener` | 6 часов | Скринер 24 ОФЗ |
 | `GET /api/banks` | 24 часа | Умные деньги (Form 101) |
 | `GET /api/inflation` | 24 часа | Инфляция + реальная ставка (КС − ИПЦ) |
+| `GET /api/calendar?days=N` | — | Календарь событий ДКП (N≤120) |
 | `GET /api/digest` | — | Текстовый дайджест |
 
 **Кэширование:** JSON файлы в `data/`. `read_cache(filename, max_age_hours)` проверяет mtime файла.

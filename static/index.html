@@ -289,6 +289,14 @@ body {
 
 /* ── SCREENER ── */
 .scr-note { background:var(--amber-s); border:1px solid rgba(255,214,10,.15); border-radius:12px; padding:10px 14px; margin-bottom:10px; font-size:12px; color:rgba(255,214,10,.8); line-height:1.55; }
+.cal-card { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:6px 14px; margin-bottom:12px; }
+.cal-row { display:flex; gap:11px; align-items:center; padding:10px 0; border-bottom:1px solid rgba(255,255,255,.04); }
+.cal-row:last-child { border-bottom:none; }
+.cal-em { font-size:18px; width:22px; text-align:center; }
+.cal-title { font-size:13px; font-weight:600; color:var(--text); }
+.cal-title.hi { color:var(--amber); }
+.cal-soft { color:var(--text3); font-weight:400; font-size:11px; }
+.cal-when { font-size:11px; color:var(--text3); margin-top:2px; }
 .scr-wrap { background:var(--glass); border:1px solid var(--border); border-radius:var(--r2); overflow:hidden; margin-bottom:8px; }
 .scr-hdr { display:grid; grid-template-columns:1fr 52px 58px 60px; gap:4px; padding:10px 14px; border-bottom:1px solid var(--border); font-size:9px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--text3); }
 .scr-row { display:grid; grid-template-columns:1fr 52px 58px 60px; gap:4px; padding:13px 14px; border-bottom:1px solid rgba(255,255,255,.04); align-items:center; cursor:pointer; transition:background .1s; }
@@ -504,6 +512,12 @@ body {
     Поделиться сделкой
   </button>
 
+  <!-- Календарь событий -->
+  <div class="sh a5"><div class="sh-t">📅 Календарь событий</div></div>
+  <div class="cal-card a5" id="calendar-list">
+    <div style="color:var(--text3)">Загрузка…</div>
+  </div>
+
   <!-- Скоро -->
   <div class="sh a6"><div class="sh-t">Для профессионалов</div></div>
   <div class="soon-grid a6">
@@ -706,16 +720,18 @@ async function loadAll() {
     if (!r.ok) throw new Error(name + ' ' + r.status);
     return r.json();
   });
-  const [ovR, meetR, scrR, banksR] = await Promise.allSettled([
+  const [ovR, meetR, scrR, banksR, calR] = await Promise.allSettled([
     getJSON('/api/overview'),
     getJSON('/api/meetings'),
     getJSON('/api/screener'),
     getJSON('/api/banks'),
+    getJSON('/api/calendar?days=21'),
   ]);
   const ov    = ovR.status    === 'fulfilled' ? ovR.value    : null;
   const meet  = meetR.status  === 'fulfilled' ? meetR.value  : null;
   const scr   = scrR.status   === 'fulfilled' ? scrR.value   : null;
   const banks = banksR.status === 'fulfilled' ? banksR.value : null;
+  const cal   = calR.status   === 'fulfilled' ? calR.value   : null;
   state.overview = ov; state.meetings = meet; state.screener = scr; state.banks = banks;
 
   if (ov) {
@@ -730,6 +746,31 @@ async function loadAll() {
   renderMeetings(meet || {});
   renderScreener(scr || {});
   renderBanks(banks || {}, ov || {});
+  renderCalendar(cal || {});
+}
+
+function renderCalendar(data) {
+  const el = $('calendar-list');
+  if (!el) return;
+  const events = (data && data.events) || [];
+  if (!events.length) {
+    el.innerHTML = '<div style="color:var(--text3)">Нет ближайших событий</div>';
+    return;
+  }
+  const M = ['','янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
+  el.innerHTML = events.slice(0, 8).map(e => {
+    const d  = new Date(e.date);
+    const du = e.days_until;
+    const when = du === 0 ? 'сегодня' : du === 1 ? 'завтра' : `через ${du} дн.`;
+    const hi = e.importance === 'high';
+    return `<div class="cal-row">
+      <div class="cal-em">${esc(e.emoji || '•')}</div>
+      <div class="cal-mid">
+        <div class="cal-title ${hi ? 'hi' : ''}">${esc(e.title)}${e.confirmed ? '' : ' <span class="cal-soft">(ожид.)</span>'}</div>
+        <div class="cal-when">${d.getDate()} ${M[d.getMonth()+1]} · ${when}</div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function renderOverview(ov) {

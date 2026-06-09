@@ -564,6 +564,18 @@ async def get_banks():
     write_cache("api_banks.json", banks)
     return json_resp(banks)
 
+@app.get("/api/calendar")
+async def get_calendar(days: int = 30):
+    from core.events import get_upcoming_events
+    days = max(1, min(int(days), 120))
+    events = [
+        {**e, "date": e["date"].isoformat(),
+         "days_until": (e["date"] - datetime.now().date()).days}
+        for e in get_upcoming_events(days=days)
+    ]
+    return json_resp({"generated_at": datetime.now().isoformat(),
+                      "events": events})
+
 @app.get("/api/inflation")
 async def get_inflation():
     cached = read_cache("inflation_latest.json", max_age_hours=24)
