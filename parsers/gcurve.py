@@ -21,20 +21,26 @@ SEGMENT_LONG   = [10.00, 15.00, 20.00, 30.00]
 
 def fetch_post(date_str):
     url = "https://www.cbr.ru/hd_base/zcyc_params/zcyc/"
-    response = requests.post(
-        url,
-        data={"UniDbQuery.Posted": "True", "UniDbQuery.To": date_str},
-        headers={
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-            "Content-Type": "application/x-www-form-urlencoded",
-            "Referer": url,
-        }
-    )
-    response.raise_for_status()
+    try:
+        response = requests.post(
+            url,
+            data={"UniDbQuery.Posted": "True", "UniDbQuery.To": date_str},
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Referer": url,
+            },
+            timeout=10
+        )
+        response.raise_for_status()
+    except requests.exceptions.RequestException:
+        return None
     return response.text
 
 
 def parse_gcurve(html, date_str):
+    if not html:
+        return None
     soup = BeautifulSoup(html, "html.parser")
     for script in soup.find_all("script"):
         if not script.string:
@@ -48,7 +54,14 @@ def parse_gcurve(html, date_str):
         values = []
         for item in raw.split(","):
             item = item.strip()
-            values.append(None if item == "null" else float(item))
+            if item in ("null", ""):
+                values.append(None)
+                continue
+            try:
+                values.append(float(item))
+            except ValueError:
+                # Неожиданный формат данных ЦБ — возвращаем None (контракт функции)
+                return None
         if len(values) != len(MATURITIES):
             return None
         if all(v is None for v in values):
@@ -187,9 +200,14 @@ def analyze_curve_vs_key_rate(df, key_rate):
     min_срок      = df.loc[df["доходность_пct"].idxmin(), "срок_лет"]
     ожид_снижение = key_rate - min_yield
 
-    y2          = df.loc[df["срок_лет"] == 2.0,  "доходность_пct"].values[0]
-    y10         = df.loc[df["срок_лет"] == 10.0, "доходность_пct"].values[0]
-    наклон_2_10 = round(y10 - y2, 2)
+    def _y(t):
+        # Безопасный доступ к доходности по сроку: None если узел отсутствует
+        r = df.loc[df["срок_лет"] == t, "доходность_пct"]
+        return float(r.values[0]) if not r.empty else None
+
+    y2          = _y(2.0)
+    y10         = _y(10.0)
+    наклон_2_10 = round(y10 - y2, 2) if (y2 is not None and y10 is not None) else None
 
     avg_short  = _segment_avg(df, SEGMENT_SHORT)
     avg_medium = _segment_avg(df, SEGMENT_MEDIUM)
@@ -215,21 +233,23 @@ def analyze_curve_vs_key_rate(df, key_rate):
     print(f"\n  ПОЧЕМУ — 3 сигнала:")
 
     # Сигнал 1: разрыв между КС и кривой
-    разрыв_1Y = key_rate - df.loc[df["срок_лет"] == 1.0, "доходность_пct"].values[0]
-    print(f"\n  ① Краткосрочные ОФЗ дают {df.loc[df['срок_лет']==1.0,'доходность_пct'].values[0]:.2f}%")
-    print(f"    при ключевой ставке {key_rate}%")
-    print(f"    → Рынок уже «не верит» в текущую ставку на горизонте года")
+    y1 = _y(1.0)
+    if y1 is not None:
+        print(f"\n  ① Краткосрочные ОФЗ дают {y1:.2f}%")
+        print(f"    при ключевой ставке {key_rate}%")
+        print(f"    → Рынок уже «не верит» в текущую ставку на горизонте года")
 
     # Сигнал 2: форма кривой
-    if наклон_2_10 < 0:
-        форма_объяснение = "кривая перевёрнута — очень сильный сигнал снижения"
-    elif наклон_2_10 < 0.5:
-        форма_объяснение = "кривая плоская — рынок в ожидании"
-    else:
-        форма_объяснение = "кривая нормальная — рынок спокоен"
-    print(f"\n  ② Длинные ОФЗ (10 лет) дают {y10:.2f}%,")
-    print(f"    короткие (2 года) — {y2:.2f}%")
-    print(f"    → Форма кривой: {форма_объяснение}")
+    if наклон_2_10 is not None:
+        if наклон_2_10 < 0:
+            форма_объяснение = "кривая перевёрнута — очень сильный сигнал снижения"
+        elif наклон_2_10 < 0.5:
+            форма_объяснение = "кривая плоская — рынок в ожидании"
+        else:
+            форма_объяснение = "кривая нормальная — рынок спокоен"
+        print(f"\n  ② Длинные ОФЗ (10 лет) дают {y10:.2f}%,")
+        print(f"    короткие (2 года) — {y2:.2f}%")
+        print(f"    → Форма кривой: {форма_объяснение}")
 
     # Сигнал 3: где минимум
     print(f"\n  ③ Минимальная доходность на рынке: {min_yield:.2f}%")
@@ -255,8 +275,9 @@ def analyze_curve_vs_key_rate(df, key_rate):
               f"  {arrow}{delta:>+.2f}%")
 
     print(f"  {'─'*51}")
+    наклон_str = f"{наклон_2_10:+.2f}%" if наклон_2_10 is not None else "н/д"
     print(f"  КС: {key_rate:.1f}%  |  "
-          f"Наклон 2–10: {наклон_2_10:+.2f}%  |  "
+          f"Наклон 2–10: {наклон_str}  |  "
           f"Мин. доходность: {min_yield:.2f}% ({min_срок}л)")
     print(f"  Средние по участкам — "
           f"короткий: {avg_short:.2f}%  "

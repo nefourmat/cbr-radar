@@ -38,6 +38,7 @@ CBR_MEETINGS_2026 = [
     {"date": date(2026, 7, 24), "type": "опорное",  "done": False, "decision_bps": None},
     {"date": date(2026, 9, 11), "type": "обычное",  "done": False, "decision_bps": None},
     {"date": date(2026, 10, 23),"type": "опорное",  "done": False, "decision_bps": None},
+]
 CBR_MEETINGS_2027 = [
     {"date": date(2027, 2, 12), "type": "опорное",  "done": False, "decision_bps": None},
     {"date": date(2027, 3, 19), "type": "обычное",  "done": False, "decision_bps": None},
@@ -92,25 +93,6 @@ def interpolate_spot(gcurve_df, key_rate, t_years):
     return yields[maturities[-1]]
 
 
-def forward_rate(r1, t1, r2, t2):
-    """
-    Forward rate для периода [t1, t2] из spot rates.
-    f(t1,t2) = ((1+r2)^t2 / (1+r1)^t1)^(1/(t2-t1)) - 1
-    """
-    if t2 <= t1:
-        return r2
-    if t1 == 0:
-        return r2 / 100  # spot = forward for starting period
-
-    num = (1 + r2/100) ** t2
-    den = (1 + r1/100) ** t1
-
-    if den <= 0:
-        return r2
-
-    return (num/den) ** (1/(t2-t1)) - 1
-
-
 # ─────────────────────────────────────────────
 # КОНВЕРТАЦИЯ IMPLIED CUT → ВЕРОЯТНОСТЬ
 # ─────────────────────────────────────────────
@@ -120,10 +102,10 @@ def implied_cut_to_prob(implied_cut_bps, typical_step=50):
     Конвертирует ожидаемое снижение в вероятность.
 
     Калибровка:
-    - 0 бп ожидаемого снижения → 20% (базовая вероятность в цикле снижения)
-    - 50 бп → 60%
-    - 100 бп → 82%
-    - 150+ бп → 95%
+    - 0 бп ожидаемого снижения → 31% (базовая вероятность в цикле снижения)
+    - 50 бп → 67%
+    - 100 бп → 90%
+    - 150+ бп → 94%
 
     Логистическая функция: P = 1 / (1 + exp(-k*(x - x0)))
     где x0 = 50 (midpoint) и k = 0.04 (steepness)
@@ -305,7 +287,7 @@ def format_output(results, key_rate, curve_date):
         f"  → Рынок ожидает КС в среднем 13.6% в ближайшие 3 мес",
         f"  → Implied cuts ≈ 90 бп за 2 заседания",
         f"  Вероятности = forward rates → логистическая функция",
-        f"  (калибровка: 0 бп=20%, 50 бп=60%, 100 бп=82%, 150 бп=95%)",
+        f"  (калибровка: 0 бп=31%, 50 бп=67%, 100 бп=90%, 150 бп=94%)",
         "",
         f"  ⚠ Это рыночный консенсус, не официальный прогноз.",
         f"  Точность: ±15% от реальной вероятности.",

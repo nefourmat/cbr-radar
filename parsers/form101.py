@@ -58,7 +58,7 @@ def get_rar_urls(limit=12):
     url     = f"{BASE_URL}/banking_sector/otchetnost-kreditnykh-organizaciy/"
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
     soup    = BeautifulSoup(
-        requests.get(url, headers=headers).text, "html.parser"
+        requests.get(url, headers=headers, timeout=30).text, "html.parser"
     )
     links = []
     for a in soup.find_all("a", href=True):
@@ -72,7 +72,7 @@ def get_rar_urls(limit=12):
 def download_and_extract(rar_url, sevenzip):
     """Скачивает RAR и распаковывает. Возвращает (extract_dir, rar_path)."""
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-    resp    = requests.get(rar_url, headers=headers)
+    resp    = requests.get(rar_url, headers=headers, timeout=60)
     resp.raise_for_status()
 
     tmp_rar = tempfile.NamedTemporaryFile(suffix=".rar", delete=False)
@@ -80,13 +80,18 @@ def download_and_extract(rar_url, sevenzip):
     tmp_rar.close()
 
     extract_dir = tempfile.mkdtemp()
-    result = subprocess.run(
-        [sevenzip, "e", tmp_rar.name, f"-o{extract_dir}", "-y"],
-        capture_output=True, text=True
-    )
-    if result.returncode != 0:
-        shutil.rmtree(extract_dir)
-        return None, tmp_rar.name
+    try:
+        result = subprocess.run(
+            [sevenzip, "e", tmp_rar.name, f"-o{extract_dir}", "-y"],
+            capture_output=True, text=True
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"7-Zip код {result.returncode}")
+    except Exception:
+        # При любом сбое распаковки чистим оба временных артефакта
+        shutil.rmtree(extract_dir, ignore_errors=True)
+        os.unlink(tmp_rar.name)
+        return None, None
 
     return extract_dir, tmp_rar.name
 
@@ -216,8 +221,6 @@ def process_one_month(rar_info, sevenzip):
             registry.update(names)  # N1 приоритетнее
             names = registry
 
-        if df is not None and names:
-            df["bank_name"] = df["bank_id"].map(names).fillna("Неизвестный")
         if df is not None:
             df["bank_name"] = df["bank_id"].map(names).fillna(
                 df["bank_id"].map(BANKS_FALLBACK)
@@ -380,13 +383,10 @@ if __name__ == "__main__":
             print(f"{int(row['bank_id']):>6}  {name:<30} "
                   f"{prev:>8.1f} {now:>8.1f} {chg:>+8.1f}")
 
-    # Сохраняем
+    # Сохраняем — со change_mln если есть данные двух месяцев, иначе текущий месяц
     out_path = "data/form101_latest.csv"
-    df_now.to_csv(out_path, index=False)
-    # Добавляем change_mln если есть данные двух месяцев
     if df_prev is not None:
-        smart = calc_smart_money(df_now, df_prev)
-        smart.to_csv("data/form101_latest.csv", index=False)
+        smart.to_csv(out_path, index=False)
     else:
-        df_now.to_csv("data/form101_latest.csv", index=False)
+        df_now.to_csv(out_path, index=False)
     print(f"\n✓ Сохранено: {out_path}")

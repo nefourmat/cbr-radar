@@ -646,7 +646,9 @@ function doShare(){
 const API = window.location.hostname === 'localhost' ? 'http://localhost:8000' : '';
 const state = { overview: null, meetings: null, screener: null, banks: null };
 const $ = id => document.getElementById(id);
-const fmt = n => new Intl.NumberFormat('ru').format(Math.round(n));
+const fmt = n => Number.isFinite(n) ? new Intl.NumberFormat('ru').format(Math.round(n)) : '—';
+// Экранирование строк из API перед вставкой в innerHTML (защита от поломки разметки/XSS)
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 const MONTHS = ['','января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
 const REGIME_COLORS = { green:'var(--green)', blue:'var(--blue)', amber:'var(--amber)', red:'var(--red)' };
@@ -658,25 +660,35 @@ function fmtDate(iso) {
 }
 
 async function loadAll() {
-  try {
-    const [ov, meet, scr, banks] = await Promise.all([
-      fetch(API + '/api/overview').then(r => { if(!r.ok) throw new Error('overview'); return r.json(); }),
-      fetch(API + '/api/meetings').then(r => r.json()),
-      fetch(API + '/api/screener').then(r => r.json()),
-      fetch(API + '/api/banks').then(r => r.json()),
-    ]);
-    state.overview = ov; state.meetings = meet; state.screener = scr; state.banks = banks;
+  // Каждый эндпоинт грузим независимо: сбой одного не должен ронять остальные панели
+  const getJSON = name => fetch(API + name).then(r => {
+    if (!r.ok) throw new Error(name + ' ' + r.status);
+    return r.json();
+  });
+  const [ovR, meetR, scrR, banksR] = await Promise.allSettled([
+    getJSON('/api/overview'),
+    getJSON('/api/meetings'),
+    getJSON('/api/screener'),
+    getJSON('/api/banks'),
+  ]);
+  const ov    = ovR.status    === 'fulfilled' ? ovR.value    : null;
+  const meet  = meetR.status  === 'fulfilled' ? meetR.value  : null;
+  const scr   = scrR.status   === 'fulfilled' ? scrR.value   : null;
+  const banks = banksR.status === 'fulfilled' ? banksR.value : null;
+  state.overview = ov; state.meetings = meet; state.screener = scr; state.banks = banks;
+
+  if (ov) {
     renderOverview(ov);
-    renderMeetings(meet);
-    renderScreener(scr);
-    renderBanks(banks, ov);
     renderPosition(ov);
     updateSharePreview(ov);
-  } catch(e) {
-    console.error('API error:', e);
+  } else {
+    console.error('overview error:', ovR.reason);
     $('regime-name').textContent = 'Нет данных';
     $('regime-desc').textContent = 'Не удалось загрузить данные. Попробуйте обновить страницу.';
   }
+  renderMeetings(meet || {});
+  renderScreener(scr || {});
+  renderBanks(banks || {}, ov || {});
 }
 
 function renderOverview(ov) {
@@ -723,7 +735,7 @@ function renderOverview(ov) {
   (rec.payout || []).forEach(p => {
     const row = document.createElement('div');
     row.className = 'payout-row' + (p.base ? ' highlight' : '');
-    row.innerHTML = `<div class="pr-label">${p.scenario}${p.base ? ' <span class="pr-badge">Базовый</span>' : ''}</div><div class="pr-rub ${p.base?'b':'n'}">₽${fmt(p.rub)}</div><div class="pr-pct">+${p.pct}%</div>`;
+    row.innerHTML = `<div class="pr-label">${esc(p.scenario)}${p.base ? ' <span class="pr-badge">Базовый</span>' : ''}</div><div class="pr-rub ${p.base?'b':'n'}">₽${fmt(p.rub)}</div><div class="pr-pct">+${p.pct ?? '—'}%</div>`;
     prow.appendChild(row);
   });
 
@@ -751,7 +763,11 @@ function renderMeetings(data) {
 }
 
 function renderScreener(data) {
-  if (!data?.bonds?.length) return;
+  if (!data?.bonds?.length) {
+    $('scr-note').textContent = 'Нет данных скринера — обновится автоматически';
+    $('screener-rows').innerHTML = '';
+    return;
+  }
   const sm = data.supply_metrics || {};
   const sp = Math.round((sm.supply_pressure || 0) * 100);
   const baseLbl = (data.rate_scenarios || []).find(s => s.id === 'cut_50')?.label?.replace('КС → ','→') || 'P&L';
@@ -763,7 +779,7 @@ function renderScreener(data) {
   $('screener-rows').innerHTML = data.bonds.slice(0,12).map(b => {
     const pnl = b.pnl_base_adjusted ?? b.pnl_13_adjusted ?? 0;
     const cls = pnl >= 20 ? 'cg' : pnl >= 17 ? 'cb' : 'cn';
-    return `<div class="scr-row"><div><div class="sr-n">${b.shortname}</div><div class="sr-m">${(b.matdate||'').slice(0,4)} · ${(b.coupon_pct||0).toFixed(2)}%</div></div><div class="sr-d">${b.duration}л</div><div class="sr-y">${b.ytm}%</div><div class="sr-p ${cls}">+${pnl}%</div></div>`;
+    return `<div class="scr-row"><div><div class="sr-n">${esc(b.shortname)}</div><div class="sr-m">${esc((b.matdate||'').slice(0,4))} · ${(b.coupon_pct||0).toFixed(2)}%</div></div><div class="sr-d">${b.duration}л</div><div class="sr-y">${b.ytm}%</div><div class="sr-p ${cls}">+${pnl}%</div></div>`;
   }).join('');
 }
 
@@ -776,7 +792,7 @@ function renderBanks(banks, ov) {
   }
   const max = Math.max(...list.map(b => b.change_bln || 0), 1);
   el.innerHTML = list.slice(0,8).map((b,i) => `
-    <div class="bank a${Math.min(i+1,4)}"><div class="bank-top"><div><div class="bank-name">${b.name}</div></div><div class="bank-chg">+₽${b.change_bln} млрд</div></div><div class="bank-bar"><div class="bank-fill" style="width:${Math.round((b.change_bln/max)*100)}%"></div></div></div>
+    <div class="bank a${Math.min(i+1,4)}"><div class="bank-top"><div><div class="bank-name">${esc(b.name)}</div></div><div class="bank-chg">+₽${b.change_bln} млрд</div></div><div class="bank-bar"><div class="bank-fill" style="width:${Math.round((b.change_bln/max)*100)}%"></div></div></div>
   `).join('');
   const streak = banks.streak || 0;
   $('banks-subtitle').textContent = `Форма 101 · стрик накопления ${streak} мес · ${banks.description || ''}`;

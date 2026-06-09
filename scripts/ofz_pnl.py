@@ -181,7 +181,11 @@ def calc_historical_pnl(prices_df, entry_date_str="2024-08-01"):
     total_return = price_gain + coupons_received
     pct_return   = total_return / entry_price * 100
     months_held  = (current_dt - entry_dt).days / 30.4
-    annualized   = (1 + pct_return/100) ** (12/months_held) - 1
+    # Защита от деления на ноль (одна строка в серии): пропускаем annualize
+    if months_held < 1:
+        annualized = pct_return / 100
+    else:
+        annualized = (1 + pct_return/100) ** (12/months_held) - 1
 
     return {
         "entry_date":        entry_dt.date(),
@@ -213,13 +217,15 @@ def duration_approx(maturity_date, coupon_rate, yield_pct):
         return years_left / 2
 
     # Формула Маколея
-    d = (1 + y) / y - years_left * (c - y) / (c * ((1 + y)**years_left - 1) + y)
+    d = (1 + y) / y - ((1 + y) + years_left * (c - y)) / (c * ((1 + y)**years_left - 1) + y)
     return max(1.0, min(d, years_left))
 
 
-def calc_price_sensitivity(duration, yield_change_bps):
+def calc_price_sensitivity(duration, yield_change_bps, yield_pct):
     """Изменение цены при изменении доходности на N бп."""
-    mod_duration = duration / 1.0  # упрощение: mod_dur ≈ dur
+    # Модифицированная дюрация: mod_dur = MacDur / (1 + y), y в долях
+    y = yield_pct / 100
+    mod_duration = duration / (1 + y)
     return -mod_duration * (yield_change_bps / 100)
 
 
@@ -247,7 +253,7 @@ def scenarios_for_now(current_price, current_yield_pct, key_rate):
     for label, cut_bps, months in rate_cuts:
         # Изменение доходности ≈ изменение КС (упрощение)
         yield_change = cut_bps  # в бп
-        price_chg_pct = calc_price_sensitivity(dur, yield_change)
+        price_chg_pct = calc_price_sensitivity(dur, yield_change, current_yield_pct)
         price_chg_rub = current_price * price_chg_pct / 100
 
         coupon_period = coupon_12m * (months / 12)

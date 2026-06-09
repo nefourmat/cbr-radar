@@ -16,6 +16,7 @@ scripts/refresh_data.py
 """
 
 import sys
+import os
 import json
 import logging
 import traceback
@@ -97,7 +98,7 @@ def refresh_auctions():
         signal = build_auction_signal(df)
         result = {"generated_at": datetime.now().isoformat(), **signal}
         _write("auctions_latest.json", result)
-        df.to_csv(DATA_DIR / "auctions_all.csv", index=False)
+        _write_csv(df, DATA_DIR / "auctions_all.csv")
         log.info(
             f"  BTC = {signal['avg_btc']:.2f}×, "
             f"тренд доходности = {signal['yield_trend']:+.2f}%"
@@ -197,18 +198,30 @@ def refresh_screener():
 # 5. FORM 101 (только если данные устарели)
 # ─────────────────────────────────────────────
 
+def _form101_cache_valid(path) -> bool:
+    """Проверяет, что CSV-кэш Form 101 читается, непустой и содержит нужные колонки."""
+    try:
+        import pandas as pd
+        df = pd.read_csv(path)
+        return not df.empty and "bank_id" in df.columns
+    except Exception:
+        return False
+
+
 def refresh_form101():
     """
     Форма 101 обновляется раз в месяц (ЦБ публикует ~5-го числа).
-    Не запускаем если кэш свежее 25 дней.
+    Не запускаем если кэш свежее 25 дней и валиден.
     """
     cache = DATA_DIR / "form101_latest.csv"
     if cache.exists():
         age_days = (datetime.now().timestamp() - cache.stat().st_mtime) / 86400
-        if age_days < 25:
+        if age_days < 25 and _form101_cache_valid(cache):
             log.info(f"  Form 101: кэш свежий ({age_days:.0f} дней), пропускаем")
             RESULTS["Form 101"] = f"SKIP (кэш {age_days:.0f}д)"
             return
+        if age_days < 25:
+            log.warning("  Form 101: кэш свежий по дате, но повреждён/пуст — обновляем")
 
     with step("Form 101"):
         import subprocess
@@ -258,9 +271,20 @@ def refresh_api_overview():
 # ─────────────────────────────────────────────
 
 def _write(filename: str, data: dict):
+    # Атомарная запись: временный файл в той же папке → os.replace
     path = DATA_DIR / filename
-    with open(path, "w", encoding="utf-8") as f:
+    tmp  = path.with_suffix(path.suffix + ".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2, default=str)
+    os.replace(tmp, path)
+
+
+def _write_csv(df, path):
+    """Атомарная запись DataFrame в CSV (временный файл → os.replace)."""
+    path = Path(path)
+    tmp  = path.with_suffix(path.suffix + ".tmp")
+    df.to_csv(tmp, index=False)
+    os.replace(tmp, path)
 
 
 # ─────────────────────────────────────────────

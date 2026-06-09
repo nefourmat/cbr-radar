@@ -306,8 +306,14 @@ def compose_digest(curve, auctions, smart_money, hypotheses):
 
     # Аукционы
     a_arr = _arrow(auctions["avg_btc"] - 1.0, threshold=0.15)
-    ratio = auctions["ratio_to_norm"]
-    norm_d = f"в {1/ratio:.1f}× меньше нормы" if ratio < 1 else "норма"
+    # Считаем отношение к норме от сырого avg_btc (не от округлённого), защищаемся от деления на ноль
+    avg_btc = auctions["avg_btc"]
+    if avg_btc <= 0:
+        norm_d = "спрос практически отсутствует"
+    elif avg_btc < 1.5:
+        norm_d = f"в {1.5/avg_btc:.1f}× меньше нормы"
+    else:
+        norm_d = "норма"
     L += [
         f"\n  ② Аукционы Минфина{'':>30}{a_arr} {_label(a_arr)}",
         f"  {div('─')}",
