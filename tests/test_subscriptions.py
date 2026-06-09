@@ -60,6 +60,15 @@ class TestSubscriptions:
         # перечитываем из файла
         assert store.get_subs(111)["inflation"] is True
 
+    def test_unsubscribe_all_turns_everything_off(self, store):
+        store.register(111, "A")
+        store.unsubscribe_all(111)
+        s = store.get_subs(111)
+        assert not any(s.values())
+        assert store.subscribers_for("meetings") == []
+        # запись сохраняется — пользователь может снова включить
+        assert store.count() == 1
+
     def test_normalize_adds_missing_keys(self, store):
         # старая запись без новых ключей
         store._save({"111": {"name": "old", "subs": {"meetings": True}}})

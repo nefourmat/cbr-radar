@@ -20,9 +20,13 @@ import threading
 from pathlib import Path
 from datetime import datetime
 
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
-STORE    = DATA_DIR / "subscribers.json"
-_LOCK    = threading.Lock()
+# Куда складывать состояние подписок. По умолчанию — data/ в репозитории.
+# На проде задайте STATE_DIR на смонтированный том (Railway volume), иначе при
+# редеплое эфемерная ФС обнулит подписки.
+STATE_DIR = Path(os.getenv("STATE_DIR") or (Path(__file__).resolve().parent.parent / "data"))
+DATA_DIR  = STATE_DIR          # совместимость с прежним именем / тестами
+STORE     = STATE_DIR / "subscribers.json"
+_LOCK     = threading.Lock()
 
 # ─────────────────────────────────────────────
 # РЕЕСТР ТИПОВ УВЕДОМЛЕНИЙ
@@ -69,7 +73,7 @@ def _load() -> dict:
 
 
 def _save(data: dict) -> None:
-    DATA_DIR.mkdir(exist_ok=True)
+    STORE.parent.mkdir(parents=True, exist_ok=True)
     tmp = STORE.with_suffix(".json.tmp")
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
@@ -159,6 +163,17 @@ def subscribers_for(key: str) -> list:
             except ValueError:
                 out.append(cid)
     return out
+
+
+def unsubscribe_all(chat_id) -> None:
+    """Отписывает пользователя от всех уведомлений (запись сохраняется)."""
+    cid = str(chat_id)
+    with _LOCK:
+        data = _load()
+        if cid not in data:
+            data[cid] = {"name": "", "joined": datetime.now().isoformat(timespec="seconds")}
+        data[cid]["subs"] = {k: False for k in _KEYS}
+        _save(data)
 
 
 def remove(chat_id) -> None:

@@ -236,7 +236,7 @@ PTB 21 (async). Получает данные через HTTP `GET {API_BASE}/ap
 (не дёргает пайплайн напрямую — нет гонок с инвалидацией кэша).
 
 **Команды** (видны в меню бота через `set_my_commands`):
-`/start` `/pulse` `/calendar` `/signal` `/digest` `/settings`.
+`/start` `/pulse` `/calendar` `/signal` `/digest` `/settings` `/stop` (отписка от всего).
 
 **Подписки на уведомления** (`core/subscriptions.py`):
 хранилище `data/subscribers.json` (`{chat_id: {subs: {key: bool}}}`, атомарная запись).
@@ -271,9 +271,10 @@ PTB 21 (async). Получает данные через HTTP `GET {API_BASE}/ap
 **Настройка в @BotFather (вручную):** задать описание/about, картинку, и
 кнопку Menu → Web App на `WEBAPP_URL` (Bot Settings → Menu Button).
 
-> ⚠️ **Важно:** `data/subscribers.json` лежит на файловой системе сервиса бота.
-> На Railway ФС эфемерна — при редеплое подписки сбрасываются. Для прод-надёжности
-> нужен персистентный том или БД (Supabase) — см. «Известные ограничения».
+**Персистентность подписок:** путь хранилища настраивается через env `STATE_DIR`
+(`subscribers.json` и `notify_state.json`). На проде укажите `STATE_DIR` на
+смонтированный том (Railway volume), иначе эфемерная ФС обнулит подписки при
+редеплое. По умолчанию (без env) — `data/` в репозитории.
 
 ---
 
