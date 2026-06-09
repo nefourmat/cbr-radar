@@ -169,7 +169,7 @@ body {
 }
 
 /* ── SIGNAL STRIP ── */
-.strip { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:12px; }
+.strip { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px; }
 .sp {
   border-radius:var(--r2); border:1px solid var(--border);
   background:var(--glass); padding:12px 10px; text-align:center;
@@ -186,6 +186,13 @@ body {
 .sp.r .sp-val { color:var(--red); }
 .sp.a .sp-val { color:var(--amber); }
 .sp-num { font-size:10px; color:var(--text2); margin-top:2px; }
+.infl-caption { padding:11px 14px; font-size:11px; line-height:1.45; color:var(--text2); border-top:1px solid var(--border); }
+.infl-perception { display:flex; flex-wrap:wrap; gap:8px; padding:11px 14px 0; }
+.infl-perception .ip { display:flex; align-items:baseline; gap:5px; padding:4px 9px; border:1px solid var(--border); border-radius:7px; font-size:11px; }
+.infl-perception .ip-l { color:var(--text3); }
+.infl-perception .ip-v { color:var(--text2); font-weight:600; font-variant-numeric:tabular-nums; }
+.infl-perception .ip-hot { border-color:var(--amber); }
+.infl-perception .ip-hot .ip-v { color:var(--amber); font-size:13px; }
 
 /* ── BUTTONS ── */
 .btn-primary {
@@ -410,6 +417,40 @@ body {
       <div class="sp-val" id="sig-bank-label">—</div>
       <div class="sp-num" id="sig-bank-num">—</div>
     </div>
+    <div class="sp" id="sig-infl-tile">
+      <div class="sp-ic">📊</div>
+      <div class="sp-lbl">Инфляция</div>
+      <div class="sp-val" id="sig-infl-label">—</div>
+      <div class="sp-num" id="sig-infl-num">—</div>
+    </div>
+  </div>
+
+  <!-- Инфляция и реальная ставка -->
+  <div class="rec a2" id="infl-card">
+    <div class="rec-metrics">
+      <div class="rm">
+        <div class="rm-label">Инфляция г/г</div>
+        <div class="rm-val" id="infl-yoy">—</div>
+        <div class="rm-note" id="infl-yoy-note">цель ЦБ</div>
+      </div>
+      <div class="rm">
+        <div class="rm-label">Реальная ставка</div>
+        <div class="rm-val blue" id="infl-real">—</div>
+        <div class="rm-note">КС − инфляция</div>
+      </div>
+      <div class="rm">
+        <div class="rm-label">Тренд 3м</div>
+        <div class="rm-val" id="infl-trend">—</div>
+        <div class="rm-note">изменение инфляции</div>
+      </div>
+    </div>
+    <!-- инФОМ: разрыв доверия (официальная vs наблюдаемая) -->
+    <div class="infl-perception" id="infl-perception">
+      <span class="ip"><span class="ip-l">Официальная</span><span class="ip-v" id="infl-official">—</span></span>
+      <span class="ip ip-hot"><span class="ip-l">Наблюдаемая</span><span class="ip-v" id="infl-observed">—</span></span>
+      <span class="ip"><span class="ip-l">Ожидаемая</span><span class="ip-v" id="infl-expected">—</span></span>
+    </div>
+    <div class="infl-caption" id="infl-caption"></div>
   </div>
 
   <!-- Рекомендация -->
@@ -695,7 +736,7 @@ function renderOverview(ov) {
   
   if (!ov) return;
   const r = ov.regime || {}, rec = ov.recommendation || {}, sig = ov.signals || {};
-  const cur = sig.curve || {}, auc = sig.auctions || {}, bnk = sig.banks || {};
+  const cur = sig.curve || {}, auc = sig.auctions || {}, bnk = sig.banks || {}, inf = sig.inflation || {};
 
   const week = ov.generated_at ? new Date(ov.generated_at) : new Date();
   
@@ -711,6 +752,44 @@ function renderOverview(ov) {
   $('sig-auc-num').textContent = auc.avg_btc != null ? `BTC ${auc.avg_btc}×` : '—';
   $('sig-bank-label').textContent = bnk.label || '—';
   $('sig-bank-num').textContent = bnk.total_bln ? `+₽${bnk.total_bln} млрд` : '—';
+
+  // Инфляция (4-й сигнал)
+  $('sig-infl-label').textContent = `${inf.label || '—'} ${inf.arrow || ''}`.trim();
+  $('sig-infl-num').textContent = inf.infl_yoy != null
+    ? `${inf.infl_yoy}% → ${inf.target != null ? inf.target : 4}%`
+    : '—';
+  const inflTile = $('sig-infl-tile');
+  if (inflTile) {
+    inflTile.className = 'sp' + (inf.status === 'bull' ? ' g' : inf.status === 'warn' ? ' r' : '');
+  }
+  $('infl-yoy').textContent = inf.infl_yoy != null ? `${inf.infl_yoy}%` : '—';
+  $('infl-yoy-note').textContent = inf.gap_vs_target != null
+    ? `${inf.gap_vs_target > 0 ? '+' : ''}${inf.gap_vs_target} п.п. к цели`
+    : (inf.target != null ? `цель ${inf.target}%` : 'цель ЦБ');
+  $('infl-real').textContent = inf.real_rate != null ? `${inf.real_rate} п.п.` : '—';
+  const trend = inf.trend_3m;
+  const trendEl = $('infl-trend');
+  trendEl.textContent = trend != null
+    ? `${trend > 0 ? '+' : ''}${trend} п.п. ${trend < 0 ? '↓' : trend > 0 ? '↑' : '→'}`
+    : '—';
+  trendEl.style.color = trend != null
+    ? (trend < 0 ? 'var(--green)' : trend > 0 ? 'var(--red)' : 'var(--text2)')
+    : '';
+  $('infl-caption').textContent = inf.description || '';
+
+  // инФОМ: разрыв доверия (наблюдаемая/ожидаемая) — опционально, может отсутствовать
+  const percEl = $('infl-perception');
+  if (inf.observed != null) {
+    $('infl-official').textContent = inf.infl_yoy != null ? `${inf.infl_yoy}%` : '—';
+    const ratio = (inf.infl_yoy != null && inf.infl_yoy > 0)
+      ? ` (×${(inf.observed / inf.infl_yoy).toFixed(1)} к офиц.)`
+      : '';
+    $('infl-observed').textContent = `${inf.observed}%${ratio}`;
+    $('infl-expected').textContent = inf.expected != null ? `${inf.expected}%` : '—';
+    percEl.style.display = '';
+  } else {
+    percEl.style.display = 'none';
+  }
 
   $('rec-title').textContent = rec.asset || '—';
   const matY = rec.matdate ? rec.matdate.slice(0,4) : '—';

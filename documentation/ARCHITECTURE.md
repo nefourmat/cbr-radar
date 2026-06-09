@@ -115,6 +115,53 @@ read_bank_names(n1_path)            → dict      REGN → name
 
 ---
 
+### 4. `parsers/inflation.py` — Инфляция и реальная ставка
+
+**Источник:** `https://www.cbr.ru/hd_base/infl/`
+**Метод:** GET HTML-таблицы (кодировка `windows-1251`)
+**Колонки:** `Дата (MM.YYYY) | Ключевая ставка | Инфляция % г/г | Цель`
+
+**Ключевые функции:**
+```
+get_inflation_data()            → list[dict] | None   строки (новые сверху)
+build_inflation_signal(rows)    → dict                сигнал для главного экрана
+```
+
+**Вычисляемые сигналы:**
+- `real_rate = key_rate − infl_yoy` — реальная ставка (жёсткость ДКП)
+- `gap_vs_target = infl_yoy − target` — отклонение от цели 4%
+- `trend_3m = инфляция_тек − 3мес назад` — < 0: дезинфляция
+- `status`: `bull` (дезинфляция + жёсткая ДКП), `warn` (ускорение), `neu`
+
+**Fallback:** При сетевой ошибке → `None` (не бросает исключение).
+Кэш: `data/inflation_latest.json`.
+
+---
+
+### 5. `parsers/inflation_expectations.py` — Наблюдаемая инфляция (инФОМ)
+
+**Источник:** `https://www.cbr.ru/analytics/dkp/inflationary_expectations/`
+**Файлы:** `Infl_exp_YY-MM.xlsx` (ежемесячный опрос инФОМ, новый сверху)
+**Лист:** `Данные за все годы` — медианные оценки по месяцам.
+
+«Реальная» (ощущаемая населением) инфляция — обычно в 2–3× выше официальной.
+
+**Ключевые функции:**
+```
+get_latest_xlsx_url()         → str | None
+parse_expectations(xlsx)      → dict | None   {observed, expected, ...histories}
+get_inflation_expectations()  → dict | None   полный цикл
+```
+
+**Поля сигнала (мерджатся в inflation):**
+- `observed` — наблюдаемая инфляция (что ощущает население)
+- `expected` — ожидаемая инфляция (на год вперёд)
+- `gap_vs_official = observed − infl_yoy` — разрыв доверия Росстат vs восприятие
+
+**Fallback:** опционально; при ошибке инфляционный сигнал отдаётся без инФОМ.
+
+---
+
 ## Аналитические скрипты
 
 ### `scripts/cbr_probabilities.py` — Вероятности заседаний ЦБ
@@ -195,6 +242,7 @@ adj_yield_cut   = cut_bps × pass_through
 | `GET /api/meetings` | 6 часов | Вероятности заседаний ЦБ |
 | `GET /api/screener` | 6 часов | Скринер 24 ОФЗ |
 | `GET /api/banks` | 24 часа | Умные деньги (Form 101) |
+| `GET /api/inflation` | 24 часа | Инфляция + реальная ставка (КС − ИПЦ) |
 | `GET /api/digest` | — | Текстовый дайджест |
 
 **Кэширование:** JSON файлы в `data/`. `read_cache(filename, max_age_hours)` проверяет mtime файла.
