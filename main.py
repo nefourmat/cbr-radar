@@ -136,6 +136,24 @@ def needs_refresh() -> bool:
 # ─────────────────────────────────────────────
 scheduler = BackgroundScheduler(timezone="Europe/Moscow")
 
+def start_bot_thread():
+    """Поднимает Telegram-бота в фоновом потоке внутри веб-сервиса.
+    Бот запускается только если задан BOT_TOKEN. Один Railway-сервис = веб + бот.
+    """
+    token = os.environ.get("BOT_TOKEN", "")
+    if not token or token == "YOUR_TOKEN_HERE":
+        log.info("BOT_TOKEN не задан — Telegram-бот не запускается")
+        return
+    # Встроенный бот ходит в API локально (если API_BASE явно не задан)
+    os.environ.setdefault("API_BASE", f"http://127.0.0.1:{os.environ.get('PORT', '8000')}")
+    try:
+        import bot as tg_bot
+        threading.Thread(target=tg_bot.run_in_thread, name="tgbot", daemon=True).start()
+        log.info("Telegram-бот запущен в фоновом потоке")
+    except Exception as e:
+        log.error(f"Не удалось запустить Telegram-бота: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     log.info("Запуск ЦБ-Радар API...")
@@ -154,6 +172,9 @@ async def lifespan(app: FastAPI):
         id="wednesday", replace_existing=True)
     scheduler.start()
     log.info("APScheduler: 08:00 и Ср 13:30 МСК")
+
+    # Telegram-бот в фоновом потоке (если задан BOT_TOKEN) — один сервис на всё
+    start_bot_thread()
     yield
     scheduler.shutdown(wait=False)
     log.info("APScheduler остановлен")

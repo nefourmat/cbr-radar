@@ -529,11 +529,7 @@ def _fire(job_coro, bot: Bot):
         log.error(f"Джоба {getattr(job_coro, '__name__', job_coro)}: {e}")
 
 
-def run():
-    if BOT_TOKEN == "YOUR_TOKEN_HERE":
-        log.error("Установи BOT_TOKEN в переменных окружения!")
-        return
-
+def _build_application() -> Application:
     app = Application.builder().token(BOT_TOKEN).post_init(_post_init).build()
 
     # Команды
@@ -546,7 +542,10 @@ def run():
     app.add_handler(CommandHandler("stop",     cmd_stop))
     # Тумблеры уведомлений
     app.add_handler(CallbackQueryHandler(on_toggle, pattern=r"^sub:"))
+    return app
 
+
+def _start_scheduler(app: Application) -> BackgroundScheduler:
     # Планировщик (Europe/Moscow) — джобы исполняются на главном loop бота
     scheduler = BackgroundScheduler(timezone="Europe/Moscow")
     scheduler.add_job(lambda: _fire(job_daily_pulse, app.bot),
@@ -559,12 +558,41 @@ def run():
                       "cron", day_of_week="fri", hour=9, minute=0, id="weekly_digest")
     scheduler.add_job(lambda: _fire(job_auction_alert, app.bot),
                       "cron", day_of_week="wed", hour=13, minute=10, id="auction_alert")
-
     scheduler.start()
     log.info("Планировщик запущен")
-    log.info(f"Mini App URL: {WEBAPP_URL} · API: {API_BASE}")
+    return scheduler
 
+
+def token_ok() -> bool:
+    return bool(BOT_TOKEN) and BOT_TOKEN != "YOUR_TOKEN_HERE"
+
+
+def run():
+    """Запуск как отдельного процесса (python bot.py)."""
+    if not token_ok():
+        log.error("Установи BOT_TOKEN в переменных окружения!")
+        return
+    app = _build_application()
+    _start_scheduler(app)
+    log.info(f"Mini App URL: {WEBAPP_URL} · API: {API_BASE}")
     app.run_polling(drop_pending_updates=True)
+
+
+def run_in_thread():
+    """
+    Запуск бота из фонового потока (встраивание в веб-сервис).
+    Нужен собственный event loop и stop_signals=None — обработчики сигналов
+    можно ставить только в главном потоке.
+    """
+    if not token_ok():
+        log.warning("BOT_TOKEN не задан — Telegram-бот не запущен")
+        return
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    app = _build_application()
+    _start_scheduler(app)
+    log.info(f"Telegram-бот: polling в фоновом потоке · API: {API_BASE}")
+    app.run_polling(drop_pending_updates=True, stop_signals=None, close_loop=False)
 
 
 if __name__ == "__main__":
