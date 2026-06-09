@@ -379,10 +379,15 @@ def compute_regime(curve: dict, auctions: dict, banks: dict) -> dict:
         return {"name": "Нормализация", "color": "blue", "emoji": "🔵",
                 "desc": "Рынок ждёт снижения КС — сигнал ещё не пришёл"}
 
-def compute_recommendation(key_rate: float, auctions: dict) -> dict:
+def compute_recommendation(key_rate: float, auctions: dict, banks: dict = None) -> dict:
     pt  = auctions.get("pass_through", 0.66)
     sp  = auctions.get("supply_pressure", 0.67)
     btc = auctions.get("avg_btc", 0.49)
+
+    # Подтверждают ли «умные деньги» (банки наращивают позицию в долговых ЦБ)
+    banks = banks or {}
+    sm_confirms = (banks.get("status") == "bull"
+                   or (banks.get("total_bln") or 0) > 0)
 
     scr_path = DATA_DIR / "bond_screener.json"
     if scr_path.exists():
@@ -391,11 +396,15 @@ def compute_recommendation(key_rate: float, auctions: dict) -> dict:
                 scr = json.load(f)
             bonds = scr.get("bonds", [])
             if bonds:
-                best = max(bonds, key=lambda b: b.get("pnl_13_adjusted", 0))
-                pnl  = round(best.get("pnl_13_adjusted", 0), 1)
+                # Лучшая бумага по базовому сценарию (динамический base, fallback на legacy)
+                def _base_pnl(b):
+                    return b.get("pnl_base_adjusted", b.get("pnl_13_adjusted", 0))
+                best = max(bonds, key=_base_pnl)
+                pnl  = round(_base_pnl(best), 1)
                 p11  = round(best.get("pnl_11_adjusted", 0), 1)
                 flat = round(best.get("pnl_flat", 0), 1)
                 pcut = round(pnl + 8, 1)
+                base_label = best.get("base_scenario", "КС → 13.0%")
                 return {
                     "asset":         best["shortname"],
                     "secid":         best.get("secid"),
@@ -405,6 +414,7 @@ def compute_recommendation(key_rate: float, auctions: dict) -> dict:
                     "duration":      best.get("duration"),
                     "pnl_base":      pnl,
                     "pnl_flat":      flat,
+                    "base_scenario": base_label,
                     "probability":   67,
                     "win_rate":      75,
                     "win_rate_n":    3,
@@ -414,10 +424,11 @@ def compute_recommendation(key_rate: float, auctions: dict) -> dict:
                     "entry_signal":  btc >= 1.5,
                     "entry_condition": f"BTC > 1.5× · сейчас {btc:.2f}×",
                     "invalidation":  "ИПЦ > 10.5% г/г",
+                    "smart_money_confirms": sm_confirms,
                     "payout": [
                         {"scenario": "КС без изменений",
                          "rub": int(100000*(1+flat/100)), "pct": flat},
-                        {"scenario": "КС → 13.0%", "base": True,
+                        {"scenario": base_label, "base": True,
                          "rub": int(100000*(1+pnl/100)), "pct": pnl},
                         {"scenario": "КС → 12.0%",
                          "rub": int(100000*(1+pcut/100)), "pct": pcut},
@@ -434,11 +445,13 @@ def compute_recommendation(key_rate: float, auctions: dict) -> dict:
         "matdate": "2040-10-03", "coupon": 13.0,
         "ytm": 14.85, "duration": 6.4,
         "pnl_base": 20.5, "pnl_flat": 14.1,
+        "base_scenario": "КС → 13.0%",
         "probability": 67, "win_rate": 75, "win_rate_n": 3, "win_rate_d": 4,
         "pass_through": pt, "supply_pressure": sp,
         "entry_signal": btc >= 1.5,
         "entry_condition": f"BTC > 1.5× · сейчас {btc:.2f}×",
         "invalidation": "ИПЦ > 10.5% г/г",
+        "smart_money_confirms": sm_confirms,
         "payout": [
             {"scenario": "КС без изменений", "rub": 114100, "pct": 14.1},
             {"scenario": "КС → 13.0%", "rub": 120500, "pct": 20.5, "base": True},
@@ -493,7 +506,7 @@ async def get_overview():
     banks     = compute_banks_signal()
     inflation = compute_inflation_signal(key_rate)
     regime    = compute_regime(curve, auctions, banks)
-    rec       = compute_recommendation(key_rate, auctions)
+    rec       = compute_recommendation(key_rate, auctions, banks)
 
     entry = auctions.get("entry_signal", False)
     verdict = ("Сигнал входа пришёл" if entry
