@@ -6,12 +6,18 @@ overview — словарь из GET /api/overview.
 Все обращения к полям защищены .get — пульс не должен падать на неполных данных.
 """
 
+import re
 from datetime import date
 
 from core.events import get_upcoming_events
 
 MONTHS = ["", "января", "февраля", "марта", "апреля", "мая", "июня",
           "июля", "августа", "сентября", "октября", "ноября", "декабря"]
+
+
+def _md(s) -> str:
+    """Экранирует спецсимволы legacy-Markdown (_ * ` [) во внешних строках."""
+    return re.sub(r"([_*`\[])", r"\\\1", str(s))
 
 
 def _nearest_event(today):
@@ -38,7 +44,7 @@ def build_pulse(overview: dict, today=None) -> str:
     lines = [
         f"📊 *Пульс рынка* · {today.day} {MONTHS[today.month]}",
         "",
-        f"{regime.get('emoji', '🔵')} Режим: *{regime.get('name', '—')}*"
+        f"{regime.get('emoji', '🔵')} Режим: *{_md(regime.get('name', '—'))}*"
         + (f"  ·  КС {kr}%" if kr is not None else ""),
     ]
 
@@ -47,8 +53,8 @@ def build_pulse(overview: dict, today=None) -> str:
     if cur:
         ec = cur.get("exp_cut")
         sig_lines.append(
-            f"  📈 Кривая: {cur.get('label', '—')} {cur.get('arrow', '')}".rstrip()
-            + (f" (−{ec}% к КС)" if ec else "")
+            f"  📈 Кривая: {_md(cur.get('label', '—'))} {cur.get('arrow', '')}".rstrip()
+            + (f" (−{ec}% к КС)" if ec is not None else "")
         )
     if auc:
         btc = auc.get("avg_btc")
@@ -65,8 +71,8 @@ def build_pulse(overview: dict, today=None) -> str:
         sig_lines.append(s)
     if bnk:
         tb = bnk.get("total_bln")
-        sig_lines.append(f"  🏛 Банки: {bnk.get('label', '—')}"
-                         + (f" (+₽{tb} млрд)" if tb else ""))
+        sig_lines.append(f"  🏛 Банки: {_md(bnk.get('label', '—'))}"
+                         + (f" (+₽{tb} млрд)" if tb is not None else ""))
     if sig_lines:
         lines.append("")
         lines.extend(sig_lines)
@@ -76,7 +82,7 @@ def build_pulse(overview: dict, today=None) -> str:
     if asset:
         pnl = rec.get("pnl_base")
         lines.append("")
-        lines.append(f"🎯 Идея: *{asset}*"
+        lines.append(f"🎯 Идея: *{_md(asset)}*"
                      + (f"  ·  +{pnl}% в базовом сценарии" if pnl is not None else ""))
 
     # Ближайшее событие
@@ -86,12 +92,12 @@ def build_pulse(overview: dict, today=None) -> str:
         when = "сегодня" if du == 0 else "завтра" if du == 1 else f"через {du} дн."
         mark = "" if ev["confirmed"] else " (ожидается)"
         lines.append("")
-        lines.append(f"📅 Ближайшее: {ev['emoji']} {ev['title']} — {when}{mark}")
+        lines.append(f"📅 Ближайшее: {ev['emoji']} {_md(ev['title'])} — {when}{mark}")
 
     # Вердикт
     action = ov.get("action") or ov.get("verdict")
     if action:
         lines.append("")
-        lines.append(f"→ {action}")
+        lines.append(f"→ {_md(action)}")
 
     return "\n".join(lines)

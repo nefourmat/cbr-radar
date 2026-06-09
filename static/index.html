@@ -759,7 +759,8 @@ function renderCalendar(data) {
   }
   const M = ['','янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
   el.innerHTML = events.slice(0, 8).map(e => {
-    const d  = new Date(e.date);
+    // Парсим ISO-дату по частям (new Date('YYYY-MM-DD') трактует как UTC → сдвиг дня)
+    const [, mo, dd] = String(e.date).split('-').map(Number);
     const du = e.days_until;
     const when = du === 0 ? 'сегодня' : du === 1 ? 'завтра' : `через ${du} дн.`;
     const hi = e.importance === 'high';
@@ -767,7 +768,7 @@ function renderCalendar(data) {
       <div class="cal-em">${esc(e.emoji || '•')}</div>
       <div class="cal-mid">
         <div class="cal-title ${hi ? 'hi' : ''}">${esc(e.title)}${e.confirmed ? '' : ' <span class="cal-soft">(ожид.)</span>'}</div>
-        <div class="cal-when">${d.getDate()} ${M[d.getMonth()+1]} · ${when}</div>
+        <div class="cal-when">${dd} ${M[mo]} · ${when}</div>
       </div>
     </div>`;
   }).join('');

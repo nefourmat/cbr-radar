@@ -36,7 +36,7 @@ from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, ContextTypes
 )
 from telegram.helpers import escape_markdown
-from telegram.error import Forbidden, TelegramError
+from telegram.error import Forbidden, TelegramError, BadRequest
 from apscheduler.schedulers.background import BackgroundScheduler
 
 # Добавляем корень проекта
@@ -131,20 +131,28 @@ async def broadcast(bot: Bot, chat_ids, text: str, markup=None) -> int:
     Возвращает число успешных отправок.
     """
     sent = 0
+    dead = []
     for cid in chat_ids:
         try:
-            await bot.send_message(chat_id=cid, text=text,
-                                   parse_mode="Markdown", reply_markup=markup)
+            try:
+                await bot.send_message(chat_id=cid, text=text,
+                                       parse_mode="Markdown", reply_markup=markup)
+            except BadRequest:
+                # Сломалась Markdown-разметка — шлём как обычный текст, не теряем сообщение
+                await bot.send_message(chat_id=cid, text=text, reply_markup=markup)
             sent += 1
             await asyncio.sleep(0.05)        # лимит Telegram ~30 msg/s
         except Forbidden:
-            # Пользователь заблокировал бота — удаляем из подписчиков
+            # Пользователь заблокировал бота — пометим на удаление
             log.info(f"chat {cid} заблокировал бота — удаляю")
-            remove(cid)
+            dead.append(cid)
         except TelegramError as e:
             log.warning(f"Не доставлено {cid}: {e}")
         except Exception as e:
             log.warning(f"Ошибка отправки {cid}: {e}")
+    if dead:
+        # Удаляем мёртвых подписчиков одним заходом вне event loop
+        await asyncio.to_thread(lambda: [remove(c) for c in dead])
     return sent
 
 
@@ -172,21 +180,27 @@ def format_signal_short(overview: dict) -> str:
     banks  = sigs.get("banks", {})
 
     em = regime.get("emoji", "🔵")
-    nm = regime.get("name", "Нормализация")
+    # Экранируем все динамические строки (могут содержать _ * ` [ из внешних данных)
+    nm    = escape_markdown(regime.get("name", "Нормализация"))
+    desc  = escape_markdown(regime.get("desc", ""))
+    asset = escape_markdown(str(rec.get("asset", "—")))
+    clabel = escape_markdown(sigs.get("curve", {}).get("label", "—"))
+    carrow = sigs.get("curve", {}).get("arrow", "")
+    bdesc = escape_markdown(banks.get("description", "—"))
 
     lines = [
         f"{em} *Режим рынка: {nm}*",
-        f"_{regime.get('desc', '')}_",
+        f"_{desc}_",
         "",
         f"*Рекомендация недели*",
-        f"Актив: `{rec.get('asset', '—')}`",
+        f"Актив: `{asset}`",
         f"Доходность: *+{rec.get('pnl_base', 0):.1f}%* при КС→13%",
         f"Вероятность: *{rec.get('probability', 0)}%* ({rec.get('win_rate', 0)}% win rate)",
         "",
         f"*Три сигнала*",
-        f"① Кривая: {sigs.get('curve', {}).get('label', '—')} {sigs.get('curve', {}).get('arrow', '')}",
+        f"① Кривая: {clabel} {carrow}",
         f"② Аукционы: BTC *{cur:.2f}×*",
-        f"③ Банки: {banks.get('description', '—')}",
+        f"③ Банки: {bdesc}",
     ]
 
     if rec.get("entry_signal"):
@@ -264,10 +278,13 @@ async def cmd_digest(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Дайджест ещё не готов.")
         return
 
+    # Бэктики в тексте сломали бы code-fence — заменяем на апострофы
+    digest = digest.replace("`", "'")
+
     # Telegram ограничение 4096 символов
     if len(digest) > 4000:
         await update.message.reply_text(
-            digest[:4000] + "\n\n_[продолжение в терминале]_",
+            f"```\n{digest[:3900]}\n```\n_[продолжение в терминале]_",
             parse_mode="Markdown",
             reply_markup=webapp_keyboard("Открыть полный анализ"),
         )
@@ -281,7 +298,7 @@ async def cmd_digest(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_pulse(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Пульс рынка по запросу."""
-    ov = fetch_overview()
+    ov = await asyncio.to_thread(fetch_overview)   # блокирующий HTTP — в тред
     if not ov:
         await update.message.reply_text("Данные загружаются... Попробуй через минуту.")
         return
@@ -365,16 +382,20 @@ async def _deliver(bot: Bot, sub_key: str, text: str, btn_label: str):
 async def job_weekly_digest(bot: Bot):
     """Пятница 09:00 — еженедельный дайджест (подписчики + канал)."""
     log.info("Готовим еженедельный дайджест...")
-    try:
+
+    def _prep():
         import subprocess
         subprocess.run([sys.executable, str(ROOT / "scripts" / "refresh_data.py")],
                        check=True, timeout=300, cwd=str(ROOT))
         subprocess.run([sys.executable, str(ROOT / "digest.py")],
                        check=True, timeout=120, cwd=str(ROOT))
+
+    try:
+        await asyncio.to_thread(_prep)   # блокирующие subprocess — в тред
     except Exception as e:
         log.error(f"Подготовка дайджеста: {e}")
 
-    overview = fetch_overview()
+    overview = await asyncio.to_thread(fetch_overview)
     issue_n  = datetime.now().strftime("Неделя %U · %d.%m.%Y")
     text     = f"📊 *ЦБ-Радар · {issue_n}*\n\n" + format_signal_short(overview)
     await _deliver(bot, "weekly_digest", text, "Открыть полный анализ")
@@ -383,7 +404,7 @@ async def job_weekly_digest(bot: Bot):
 async def job_auction_alert(bot: Bot):
     """Среда 13:10 — итоги аукциона / сигнал входа (подписчики + канал)."""
     log.info("Проверяем данные аукциона...")
-    overview = fetch_overview()
+    overview = await asyncio.to_thread(fetch_overview)
     auctions = (overview.get("signals", {}) or {}).get("auctions", {})
     if not auctions:
         log.warning("Нет данных аукциона — алерт пропущен")
@@ -416,7 +437,7 @@ async def job_daily_pulse(bot: Bot):
     subs = subscribers_for("daily_pulse")
     if not subs:
         return
-    text = build_pulse(fetch_overview())
+    text = build_pulse(await asyncio.to_thread(fetch_overview))
     sent = await broadcast(bot, subs, text, webapp_keyboard("Открыть терминал"))
     log.info(f"[daily_pulse] доставлено {sent}/{len(subs)}")
 
@@ -448,7 +469,8 @@ async def job_inflation_check(bot: Bot):
     subs = subscribers_for("inflation")
     if not subs:
         return
-    infl = (fetch_overview().get("signals", {}) or {}).get("inflation", {})
+    ov = await asyncio.to_thread(fetch_overview)
+    infl = (ov.get("signals", {}) or {}).get("inflation", {})
     period = infl.get("date")
     if not period:
         return
@@ -471,8 +493,14 @@ async def job_inflation_check(bot: Bot):
 # ЗАПУСК
 # ─────────────────────────────────────────────
 
+# Главный event loop бота (для запуска корутин из потоков APScheduler)
+MAIN_LOOP: "asyncio.AbstractEventLoop | None" = None
+
+
 async def _post_init(app: Application):
-    """Меню команд бота (best practice — кнопка «Меню» в Telegram)."""
+    """Меню команд + запоминаем event loop для планировщика."""
+    global MAIN_LOOP
+    MAIN_LOOP = asyncio.get_running_loop()
     await app.bot.set_my_commands([
         BotCommand("start",    "Запуск и информация"),
         BotCommand("pulse",    "Пульс рынка сейчас"),
@@ -483,6 +511,22 @@ async def _post_init(app: Application):
         BotCommand("stop",     "Отписаться от всех уведомлений"),
     ])
     log.info(f"Бот запущен · подписчиков: {subs_count()}")
+
+
+def _fire(job_coro, bot: Bot):
+    """
+    Запускает корутину job_coro(bot) на ГЛАВНОМ loop бота из потока APScheduler.
+    Нельзя использовать asyncio.run() — у app.bot httpx-клиент привязан к loop
+    polling'а; новый loop приведёт к 'Event loop is closed'.
+    """
+    if MAIN_LOOP is None or not MAIN_LOOP.is_running():
+        log.warning("event loop ещё не готов — джоба пропущена")
+        return
+    fut = asyncio.run_coroutine_threadsafe(job_coro(bot), MAIN_LOOP)
+    try:
+        fut.result(timeout=600)
+    except Exception as e:
+        log.error(f"Джоба {getattr(job_coro, '__name__', job_coro)}: {e}")
 
 
 def run():
@@ -503,17 +547,17 @@ def run():
     # Тумблеры уведомлений
     app.add_handler(CallbackQueryHandler(on_toggle, pattern=r"^sub:"))
 
-    # Планировщик (Europe/Moscow)
+    # Планировщик (Europe/Moscow) — джобы исполняются на главном loop бота
     scheduler = BackgroundScheduler(timezone="Europe/Moscow")
-    scheduler.add_job(lambda: asyncio.run(job_daily_pulse(app.bot)),
+    scheduler.add_job(lambda: _fire(job_daily_pulse, app.bot),
                       "cron", hour=9, minute=0, id="daily_pulse")
-    scheduler.add_job(lambda: asyncio.run(job_meeting_reminders(app.bot)),
+    scheduler.add_job(lambda: _fire(job_meeting_reminders, app.bot),
                       "cron", hour=9, minute=5, id="meeting_reminders")
-    scheduler.add_job(lambda: asyncio.run(job_inflation_check(app.bot)),
+    scheduler.add_job(lambda: _fire(job_inflation_check, app.bot),
                       "cron", hour=12, minute=0, id="inflation_check")
-    scheduler.add_job(lambda: asyncio.run(job_weekly_digest(app.bot)),
+    scheduler.add_job(lambda: _fire(job_weekly_digest, app.bot),
                       "cron", day_of_week="fri", hour=9, minute=0, id="weekly_digest")
-    scheduler.add_job(lambda: asyncio.run(job_auction_alert(app.bot)),
+    scheduler.add_job(lambda: _fire(job_auction_alert, app.bot),
                       "cron", day_of_week="wed", hour=13, minute=10, id="auction_alert")
 
     scheduler.start()

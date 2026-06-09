@@ -68,7 +68,17 @@ def _load() -> dict:
     try:
         with open(STORE, encoding="utf-8") as f:
             return json.load(f)
-    except Exception:
+    except (json.JSONDecodeError, ValueError) as e:
+        # Файл есть, но битый — НЕ затираем его молча: бэкапим и громко логируем,
+        # иначе следующий _save() уничтожит всех подписчиков.
+        try:
+            backup = STORE.with_suffix(".json.corrupt")
+            os.replace(STORE, backup)
+            print(f"[subscriptions] ПОВРЕЖДЁН {STORE}: {e} → бэкап {backup}")
+        except Exception:
+            pass
+        return {}
+    except OSError:
         return {}
 
 
@@ -161,7 +171,8 @@ def subscribers_for(key: str) -> list:
             try:
                 out.append(int(cid))
             except ValueError:
-                out.append(cid)
+                # Невалидный ключ (повреждение/ручная правка) — пропускаем
+                continue
     return out
 
 
