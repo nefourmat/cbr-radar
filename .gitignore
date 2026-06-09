@@ -16,3 +16,5 @@ data/cbr_probabilities.json
 
 .claude/
 data/inflation_latest.json
+data/subscribers.json
+data/notify_state.json
