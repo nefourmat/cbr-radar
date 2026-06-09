@@ -7,18 +7,18 @@ import os
 import sys
 import subprocess
 import threading
+import hmac
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, List
 
 import pandas as pd
-from fastapi import FastAPI, BackgroundTasks, Header, HTTPException
+from fastapi import FastAPI, BackgroundTasks, Header, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from apscheduler.schedulers.background import BackgroundScheduler
-from pydantic import BaseModel, Field
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -45,144 +45,6 @@ DATA_DIR   = Path("data")
 STATIC_DIR = Path("static")
 DATA_DIR.mkdir(exist_ok=True)
 STATIC_DIR.mkdir(exist_ok=True)
-
-# ─────────────────────────────────────────────
-# PYDANTIC МОДЕЛИ
-# ─────────────────────────────────────────────
-class RegimeModel(BaseModel):
-    name:  str
-    color: str
-    emoji: str
-    desc:  str
-
-class SignalBase(BaseModel):
-    status:      str
-    label:       str
-    arrow:       str
-    description: str
-
-class CurveSignal(SignalBase):
-    exp_cut:    float
-    y1:         float
-    y2:         float
-    y10:        float
-    slope_2_10: float
-    min_yield:  float
-    date:       str
-
-class AuctionSignal(SignalBase):
-    avg_btc:         float
-    long_btc:        float
-    last_btc:        float
-    last_date:       str
-    last_code:       str
-    last_yield:      float
-    last_demand_mln: int
-    yield_trend:     float
-    supply_pressure: float
-    pass_through:    float
-    entry_signal:    bool
-
-class BankBuyer(BaseModel):
-    name:       str
-    change_bln: float
-
-class BanksSignal(SignalBase):
-    total_bln:  float
-    streak:     int
-    buyers:     List[BankBuyer]
-
-class Signals(BaseModel):
-    curve:    CurveSignal
-    auctions: AuctionSignal
-    banks:    BanksSignal
-
-class PayoutScenario(BaseModel):
-    scenario: str
-    rub:      int
-    pct:      float
-    base:     bool = False
-
-class Recommendation(BaseModel):
-    asset:           str
-    secid:           Optional[str] = None
-    matdate:         Optional[str] = None
-    coupon:          Optional[float] = None
-    ytm:             Optional[float] = None
-    duration:        Optional[float] = None
-    pnl_base:        float
-    pnl_flat:        float
-    probability:     int
-    win_rate:        int
-    win_rate_n:      int = 3
-    win_rate_d:      int = 4
-    pass_through:    float
-    supply_pressure: float
-    entry_signal:    bool
-    entry_condition: str
-    invalidation:    str
-    payout:          List[PayoutScenario]
-
-class OverviewResponse(BaseModel):
-    generated_at:   str
-    key_rate:       float
-    key_rate_str:   str
-    verdict:        str
-    action:         str
-    regime:         RegimeModel
-    signals:        Signals
-    recommendation: Recommendation
-
-class MeetingScenarios(BaseModel):
-    hold:    int
-    cut_50:  int
-    cut_100: int
-
-class MeetingModel(BaseModel):
-    date:            str
-    type:            str
-    days_ahead:      int
-    implied_ks:      float
-    meeting_cut_bps: float
-    prob_cut:        int
-    scenarios:       MeetingScenarios
-
-class MeetingsResponse(BaseModel):
-    generated_at: str
-    key_rate:     float
-    curve_date:   str
-    meetings:     List[MeetingModel]
-
-class BondModel(BaseModel):
-    secid:              str
-    shortname:          str
-    matdate:            str
-    duration:           float
-    price_pct:          float
-    coupon_pct:         float
-    ytm:                float
-    pnl_13_theoretical: float
-    pnl_13_adjusted:    float
-    pnl_11_adjusted:    float
-    pnl_flat:           float
-
-class SupplyMetrics(BaseModel):
-    btc_current:     float
-    btc_normal:      float
-    supply_pressure: float
-    pass_through:    float
-    overhang_active: bool
-    entry_signal:    bool
-
-class ScreenerResponse(BaseModel):
-    generated_at:   str
-    supply_metrics: SupplyMetrics
-    bonds:          List[BondModel]
-
-class HealthResponse(BaseModel):
-    status: str
-    time:   str
-    data:   dict
 
 # ─────────────────────────────────────────────
 # JSON UTF-8
@@ -212,17 +74,27 @@ def read_cache(filename: str, max_age_hours: float = 24) -> Optional[dict]:
         return None
 
 def write_cache(filename: str, data: dict):
+    # Атомарная запись: пишем во временный файл в той же папке, затем os.replace
     try:
-        with open(DATA_DIR / filename, "w", encoding="utf-8") as f:
+        path = DATA_DIR / filename
+        tmp  = path.with_suffix(path.suffix + ".tmp")
+        with open(tmp, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2, default=str)
+        os.replace(tmp, path)
     except Exception as e:
         log.error(f"Ошибка записи кэша {filename}: {e}")
 
 # ─────────────────────────────────────────────
 # REFRESH — запускается через subprocess (безопасно)
 # ─────────────────────────────────────────────
+_refresh_lock = threading.Lock()
+
 def run_refresh():
     """Запускает refresh_data.py как subprocess с правильным Python."""
+    # Не запускаем параллельные refresh: если уже идёт — пропускаем
+    if not _refresh_lock.acquire(blocking=False):
+        log.warning("refresh уже выполняется — пропускаем")
+        return
     log.info("Запуск refresh_data.py...")
     try:
         env = os.environ.copy()
@@ -243,6 +115,8 @@ def run_refresh():
         log.error("refresh_data.py таймаут 300с")
     except Exception as e:
         log.error(f"refresh_data.py: {e}")
+    finally:
+        _refresh_lock.release()
 
 def needs_refresh() -> bool:
     """Нужно ли обновить данные при старте?"""
@@ -291,12 +165,30 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# CORS: список origin'ов настраивается через env CORS_ORIGINS (через запятую).
+# Если не задан — по умолчанию "*" (поведение не меняется).
+_cors_env = os.environ.get("CORS_ORIGINS", "").strip()
+CORS_ORIGINS = [o.strip() for o in _cors_env.split(",") if o.strip()] or ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ORIGINS,
     allow_methods=["GET", "POST"],   # ← POST для /api/refresh и /api/cache/clear
     allow_headers=["*"],
 )
+
+
+def require_refresh_token(x_refresh_token: str = Header(default=None)):
+    """
+    Авторизация мутирующих эндпоинтов.
+    Если env REFRESH_TOKEN задан — требуем совпадающий заголовок X-Refresh-Token.
+    Если не задан — пропускаем (обратная совместимость, поведение не меняется).
+    """
+    expected = os.environ.get("REFRESH_TOKEN")
+    if not expected:
+        return
+    if not x_refresh_token or not hmac.compare_digest(x_refresh_token, expected):
+        raise HTTPException(status_code=401, detail="Неверный или отсутствующий токен")
 
 if STATIC_DIR.exists() and any(STATIC_DIR.iterdir()):
     app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -537,14 +429,15 @@ async def health():
                       "data": files})
 
 @app.post("/api/refresh")
-async def trigger_refresh(background_tasks: BackgroundTasks):
+async def trigger_refresh(background_tasks: BackgroundTasks,
+                          _auth: None = Depends(require_refresh_token)):
     """Запускает обновление данных через subprocess в фоне."""
     background_tasks.add_task(run_refresh)
     return json_resp({"status": "started",
                       "note": "Данные обновятся через 30-120 секунд"})
 
 @app.post("/api/cache/clear")
-async def cache_clear():
+async def cache_clear(_auth: None = Depends(require_refresh_token)):
     cleared = []
     for f in list(DATA_DIR.glob("api_*.json")) + [DATA_DIR / "auctions_latest.json"]:
         if f.exists():

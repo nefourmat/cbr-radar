@@ -46,9 +46,11 @@ def get_latest_file_url() -> str | None:
     today = date.today()
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
 
-    # Пробуем несколько кандидатов: последние 90 дней с шагом 7 дней
+    # Пробуем несколько кандидатов: последние 30 дней (самые свежие)
+    # Ограничиваем число проверок, чтобы не висеть до ~20 мин в худшем случае
+    MAX_CANDIDATES = 30
     candidates = []
-    for days_ago in range(0, 120):
+    for days_ago in range(0, MAX_CANDIDATES):
         d = today - timedelta(days=days_ago)
         url = (
             f"https://minfin.gov.ru/common/upload/library/"
@@ -57,10 +59,10 @@ def get_latest_file_url() -> str | None:
         )
         candidates.append(url)
 
-    # Проверяем каждый кандидат HEAD-запросом
+    # Проверяем каждый кандидат HEAD-запросом (короткий таймаут)
     for url in candidates:
         try:
-            r = requests.head(url, headers=headers, timeout=10, allow_redirects=True)
+            r = requests.head(url, headers=headers, timeout=5, allow_redirects=True)
             if r.status_code == 200:
                 return url
         except Exception:
@@ -71,7 +73,7 @@ def get_latest_file_url() -> str | None:
 
 def download_xlsx(url):
     headers  = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-    response = requests.get(url, headers=headers)
+    response = requests.get(url, headers=headers, timeout=30)  # большой файл
     response.raise_for_status()
     return BytesIO(response.content)
 

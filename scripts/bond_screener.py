@@ -136,7 +136,7 @@ def calc_duration(coupon_pct, ytm_pct, years_left):
     return round(num / den if den > 0 else years_left, 2)
 
 
-def calc_pnl(price_pct, coupon_pct, duration, cut_bps,
+def calc_pnl(price_pct, coupon_pct, duration, cut_bps, ytm_pct,
              pass_through=1.0, horizon_years=1.0):
     """
     P&L с поправкой на supply overhang.
@@ -146,15 +146,19 @@ def calc_pnl(price_pct, coupon_pct, duration, cut_bps,
     """
     price = price_pct / 100 * FACE_VALUE
 
+    # Модифицированная дюрация: duration — Маколея, ytm_pct в процентах,
+    # полугодовое начисление купона → mod_dur = MacDur / (1 + ytm/2)
+    mod_duration = duration / (1 + ytm_pct / 100 / 2)
+
     # Теоретический
     th_dy         = cut_bps / 10000
-    th_price_chg  = -duration * th_dy * price
+    th_price_chg  = -mod_duration * th_dy * price
     th_coupon     = coupon_pct / 100 * FACE_VALUE * horizon_years
     th_total      = th_price_chg + th_coupon
 
     # Скорректированный (с учётом supply overhang)
     adj_dy        = (cut_bps * pass_through) / 10000
-    adj_price_chg = -duration * adj_dy * price
+    adj_price_chg = -mod_duration * adj_dy * price
     adj_coupon    = th_coupon  # купоны не меняются
     adj_total     = adj_price_chg + adj_coupon
 
@@ -199,7 +203,7 @@ def run_screener(supply, key_rate: float = 14.5):
                 **sc,
                 **calc_pnl(
                     price_pct, coupon_pct, dur,
-                    sc["cut_bps"],
+                    sc["cut_bps"], ytm,
                     pass_through=supply["pass_through"],
                 ),
             }

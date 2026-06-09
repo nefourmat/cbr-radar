@@ -34,10 +34,12 @@ from telegram import (
 from telegram.ext import (
     Application, CommandHandler, ContextTypes
 )
+from telegram.helpers import escape_markdown
 from apscheduler.schedulers.background import BackgroundScheduler
 
 # Добавляем корень проекта
-sys.path.insert(0, str(Path(__file__).parent))
+ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT))
 
 logging.basicConfig(
     level=logging.INFO,
@@ -49,7 +51,7 @@ BOT_TOKEN  = os.getenv("BOT_TOKEN", "YOUR_TOKEN_HERE")
 WEBAPP_URL = os.getenv("WEBAPP_URL", "https://your-app.railway.app")
 CHANNEL_ID = os.getenv("CHANNEL_ID", "")   # ID публичного канала
 
-DATA_DIR = Path("data")
+DATA_DIR = ROOT / "data"
 
 
 # ─────────────────────────────────────────────
@@ -118,7 +120,8 @@ def format_signal_short(overview: dict) -> str:
 async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Приветствие + кнопка открытия Mini App."""
     user = update.effective_user
-    name = user.first_name if user else "Инвестор"
+    # Экранируем имя: символы _ * ` [ ломают Markdown-разметку
+    name = escape_markdown(user.first_name if user else "Инвестор")
 
     text = (
         f"Привет, {name}! 👋\n\n"
@@ -194,12 +197,12 @@ async def job_weekly_digest(bot: Bot):
     try:
         import subprocess
         subprocess.run(
-            [sys.executable, "scripts/refresh_data.py"],
-            check=True, timeout=300,
+            [sys.executable, str(ROOT / "scripts" / "refresh_data.py")],
+            check=True, timeout=300, cwd=str(ROOT),
         )
         subprocess.run(
-            [sys.executable, "digest.py"],
-            check=True, timeout=120,
+            [sys.executable, str(ROOT / "digest.py")],
+            check=True, timeout=120, cwd=str(ROOT),
         )
 
         overview = load_overview()
@@ -229,13 +232,19 @@ async def job_auction_alert(bot: Bot):
     try:
         import subprocess
         subprocess.run(
-            [sys.executable, "scripts/refresh_data.py"],
-            check=True, timeout=300,
+            [sys.executable, str(ROOT / "scripts" / "refresh_data.py")],
+            check=True, timeout=300, cwd=str(ROOT),
         )
 
         overview = load_overview()
         sigs     = overview.get("signals", {})
         auctions = sigs.get("auctions", {})
+
+        # Нет данных аукциона (overview пуст/инвалидирован) — не шлём битый алерт
+        if not auctions:
+            log.warning("Нет данных аукциона — алерт пропущен")
+            return
+
         btc      = auctions.get("avg_btc", 0)
         entry    = auctions.get("entry_signal", False)
 
@@ -248,7 +257,7 @@ async def job_auction_alert(bot: Bot):
                 f"Рынок готов поглощать предложение.\n"
                 f"Рекомендация: рассмотреть вход в длинные ОФЗ."
             )
-        elif btc < 0.5:
+        elif 0 < btc < 0.5:
             # Слабый аукцион — информационный алерт
             text = (
                 f"📉 *Слабый аукцион*\n\n"

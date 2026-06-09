@@ -227,13 +227,13 @@ class TestRateHikeScenarios:
 
     def test_hike_cycle_pnl_is_negative_for_long_bonds(self):
         """При росте КС на 300 бп длинная ОФЗ даёт отрицательный P&L."""
-        result = calc_pnl(48.0, 7.1, duration=10.0, cut_bps=300, pass_through=1.0)
+        result = calc_pnl(48.0, 7.1, duration=10.0, cut_bps=300, ytm_pct=15.0, pass_through=1.0)
         assert result["adjusted_pct"] < 0, "P&L должен быть отрицательным при росте КС"
 
     def test_hike_cycle_short_bond_less_negative(self):
         """При росте КС короткая бумага теряет меньше длинной."""
-        short = calc_pnl(85.0, 7.5, duration=3.5, cut_bps=300, pass_through=1.0)
-        long_ = calc_pnl(48.0, 7.1, duration=10.0, cut_bps=300, pass_through=1.0)
+        short = calc_pnl(85.0, 7.5, duration=3.5, cut_bps=300, ytm_pct=15.0, pass_through=1.0)
+        long_ = calc_pnl(48.0, 7.1, duration=10.0, cut_bps=300, ytm_pct=15.0, pass_through=1.0)
         assert short["adjusted_pct"] > long_["adjusted_pct"]
 
     def test_screener_with_high_key_rate(self):
@@ -258,7 +258,7 @@ class TestRateHikeScenarios:
 
     def test_flat_scenario_always_positive(self):
         """Flat сценарий (только купоны) всегда положительный."""
-        result = calc_pnl(60.0, 7.1, duration=10.0, cut_bps=0, pass_through=1.0)
+        result = calc_pnl(60.0, 7.1, duration=10.0, cut_bps=0, ytm_pct=15.0, pass_through=1.0)
         assert result["adjusted_pct"] > 0, "Купонный доход всегда > 0"
 
 
@@ -320,13 +320,13 @@ class TestAuctionScenarios:
 class TestBondSelectionScenarios:
     def test_longer_duration_higher_pnl_on_rate_cut(self):
         """При снижении КС длинная бумага даёт больший P&L (duration effect)."""
-        short = calc_pnl(95, 7.5, duration=3.5, cut_bps=-150, pass_through=1.0)
-        long_ = calc_pnl(60, 7.0, duration=10.0, cut_bps=-150, pass_through=1.0)
+        short = calc_pnl(95, 7.5, duration=3.5, cut_bps=-150, ytm_pct=15.0, pass_through=1.0)
+        long_ = calc_pnl(60, 7.0, duration=10.0, cut_bps=-150, ytm_pct=15.0, pass_through=1.0)
         assert long_["adjusted_pct"] > short["adjusted_pct"]
 
     def test_supply_overhang_cuts_realistic_pnl(self):
-        full = calc_pnl(60, 7.0, duration=10.0, cut_bps=-150, pass_through=1.0)
-        weak = calc_pnl(60, 7.0, duration=10.0, cut_bps=-150, pass_through=0.66)
+        full = calc_pnl(60, 7.0, duration=10.0, cut_bps=-150, ytm_pct=15.0, pass_through=1.0)
+        weak = calc_pnl(60, 7.0, duration=10.0, cut_bps=-150, ytm_pct=15.0, pass_through=0.66)
         assert weak["adjusted_pct"] < full["adjusted_pct"]
         assert weak["theoretical_pct"] == full["theoretical_pct"]
 
